@@ -111,10 +111,85 @@ qs('#rename-apply').addEventListener('click', function() {
   setStatus('Renaming...');
 });
 
+// --- Copy Tree as Text ---
+document.addEventListener('click', function(e) {
+  var target = e.target as HTMLElement;
+  if (!target.classList.contains('copy-tree-btn')) return;
+  var source = target.dataset.source;
+  var treeData: any[] = [];
+  if (source === 'rename' && renameTreeData.length > 0) {
+    // Apply renames before building text
+    treeData = buildCleanedTree(applyRenamesToTree(renameTreeData));
+  } else if (source === 'clean') {
+    // Use the stored clean tree data
+    var cleanTreeEl = qs('#clean-tree');
+    // We need the raw tree data — store it globally
+    if ((window as any)._cleanTreeData) {
+      treeData = buildCleanedTree((window as any)._cleanTreeData);
+    }
+  }
+  var text = treeToPlainText(treeData, 0);
+  if (text) {
+    try {
+      navigator.clipboard.writeText(text);
+      target.textContent = 'Copied!';
+      setTimeout(function() { target.textContent = 'Copy Tree'; }, 1500);
+    } catch (err) {
+      // fallback
+    }
+  }
+});
+
+function treeToPlainText(nodes: any[], depth: number): string {
+  var lines: string[] = [];
+  for (var i = 0; i < nodes.length; i++) {
+    var node = nodes[i];
+    var indent = '';
+    for (var d = 0; d < depth; d++) indent += '  ';
+    var name = node.displayName || node.name || '';
+    var role = node.role || '';
+    var line = indent + name;
+    if (role && role !== name && role !== 'unknown' && role !== 'container') {
+      line += ' (' + role + ')';
+    }
+    lines.push(line);
+    if (node.children && node.children.length > 0) {
+      lines.push(treeToPlainText(node.children, depth + 1));
+    }
+  }
+  return lines.join('\n');
+}
+
+function applyRenamesToTree(nodes: any[]): any[] {
+  var out: any[] = [];
+  for (var i = 0; i < nodes.length; i++) {
+    var n = nodes[i];
+    out.push({
+      name: n.name,
+      displayName: n.suggestedName || n.name,
+      role: n.suggestedName || n.role,
+      canRemove: n.canRemove,
+      canFlatten: n.canFlatten,
+      children: n.children ? applyRenamesToTree(n.children) : [],
+    });
+  }
+  return out;
+}
+
 // --- Validate Panel ---
 qs('#validate-scan').addEventListener('click', () => {
   setStatus('Validating...');
   post({ type: 'scan', feature: 'validator' });
+});
+
+qs('#structure-scan').addEventListener('click', function() {
+  setStatus('Analyzing structure...');
+  post({ type: 'scan', feature: 'structure' });
+});
+
+qs('#text-content-scan').addEventListener('click', function() {
+  setStatus('Extracting text content...');
+  post({ type: 'scan', feature: 'text-content' });
 });
 
 // --- Label Panel ---
@@ -138,9 +213,39 @@ qs('#bem-scan').addEventListener('click', () => {
 });
 
 qs('#bem-apply').addEventListener('click', () => {
-  const includeModifiers = (qs('#bem-modifiers') as HTMLInputElement).checked;
-  post({ type: 'apply', feature: 'bem', includeModifiers });
+  var includeModifiers = (qs('#bem-modifiers') as HTMLInputElement).checked;
+  post({ type: 'apply', feature: 'bem', includeModifiers: includeModifiers });
   setStatus('Applying BEM...');
+});
+
+qs('#variant-scan').addEventListener('click', function() {
+  setStatus('Scanning variants...');
+  post({ type: 'scan', feature: 'variants' });
+});
+
+// --- Assets Export All ---
+qs('#assets-export-all').addEventListener('click', function() {
+  var checks = qsa('#assets-results .asset-export-check');
+  var assets: any[] = [];
+  checks.forEach(function(cb: any) {
+    if (!cb.checked) return;
+    var nodeId = cb.dataset.nodeId;
+    var formatSelect = qs('#assets-results .asset-format-select[data-node-id="' + nodeId + '"]') as HTMLSelectElement;
+    var scaleSelect = qs('#assets-results .asset-scale-select[data-node-id="' + nodeId + '"]') as HTMLSelectElement;
+    var renameInput = qs('#assets-results .asset-rename input[data-node-id="' + nodeId + '"]') as HTMLInputElement;
+    assets.push({
+      nodeId: nodeId,
+      name: renameInput ? renameInput.value : nodeId,
+      format: formatSelect ? formatSelect.value : 'PNG',
+      scale: scaleSelect ? parseInt(scaleSelect.value) : 1,
+    });
+  });
+  if (assets.length > 0) {
+    qs('#export-progress').style.display = 'block';
+    qs('#export-progress-text').textContent = 'Exporting 0/' + assets.length + '...';
+    post({ type: 'apply', feature: 'export-all', assets: assets });
+    setStatus('Exporting ' + assets.length + ' assets...');
+  }
 });
 
 // --- Assets Mark Exportable ---
@@ -426,6 +531,7 @@ function renderTreeInto(containerId: string, tree: any[]) {
 }
 
 function renderCleanTree(tree: any[]) {
+  (window as any)._cleanTreeData = tree;
   renderTreeInto('#clean-tree', tree);
 }
 
@@ -532,6 +638,104 @@ function renderValidationReport(data: any) {
   renderTier('#validate-skipped-list', '#validate-skipped-count', data.skipped);
 }
 
+function renderStructureSummary(data: any) {
+  qs('#validate-structure').style.display = 'block';
+
+  // Stats bar
+  var statsHtml = '';
+  statsHtml += '<div class="structure-stat">Sections: <strong>' + data.totalSections + '</strong></div>';
+  statsHtml += '<div class="structure-stat">Components: <strong>' + data.totalComponents + '</strong></div>';
+  statsHtml += '<div class="structure-stat">Text nodes: <strong>' + data.totalTextNodes + '</strong></div>';
+  statsHtml += '<div class="structure-stat">Images: <strong>' + data.totalImages + '</strong></div>';
+  statsHtml += '<div class="structure-stat">Layers: <strong>' + data.layerCount + '</strong></div>';
+  statsHtml += '<div class="structure-stat">Max depth: <strong>' + data.maxDepth + '</strong></div>';
+  qs('#structure-stats').innerHTML = statsHtml;
+
+  // Tree
+  var lines: string[] = [];
+  var entries = data.entries || [];
+  for (var i = 0; i < entries.length; i++) {
+    var entry = entries[i];
+    var indent = entry.depth > 0 ? '  \u251C\u2500 ' : '';
+    var name = escHtml(entry.name);
+    var role = entry.role || '';
+    var suffix = entry.layoutSuffix || '';
+    var details: string[] = [];
+    if (entry.childCount > 0) details.push(entry.childCount + ' children');
+    if (entry.componentCount > 0) details.push(entry.componentCount + ' components');
+    if (entry.hasImages) details.push('has images');
+
+    var line = '<span class="tree-indent">' + indent + '</span>';
+    line += '<span class="tree-keep">' + name + '</span>';
+    if (role) line += ' <span class="tree-role">(' + role + suffix + ')</span>';
+    if (details.length > 0) line += ' <span class="tree-indent"> \u2014 ' + details.join(', ') + '</span>';
+    lines.push(line);
+  }
+
+  qs('#structure-tree').innerHTML = lines.map(function(l) { return '<div>' + l + '</div>'; }).join('');
+  setStatus('Structure analysis complete');
+}
+
+function renderTextContent(data: any[]) {
+  qs('#validate-text-content').style.display = 'block';
+  var container = qs('#text-content-results');
+  if (data.length === 0) {
+    container.innerHTML = '<div class="results-empty">No text content found</div>';
+    return;
+  }
+
+  var html = '';
+  for (var i = 0; i < data.length; i++) {
+    var item = data[i];
+    var badgeClass = item.contentType === 'heading' ? 'conf-high' :
+                     item.contentType === 'button_text' ? 'conf-mid' : '';
+    var label = '';
+    if (item.contentType === 'heading') {
+      label = 'h' + item.headingLevel;
+    } else if (item.contentType === 'button_text') {
+      label = 'button';
+    } else {
+      label = 'text';
+    }
+
+    html += '<div class="result-item">';
+    html += '<span class="result-confidence ' + badgeClass + '" style="font-size:9px;min-width:45px;text-align:center">' + label + '</span>';
+    html += '<span class="result-name" style="font-style:italic;color:#374151">"' + escHtml(item.content) + '"</span>';
+    html += '</div>';
+  }
+  container.innerHTML = html;
+  setStatus('Found ' + data.length + ' text items');
+}
+
+function renderVariantResults(data: any[]) {
+  var container = qs('#variant-results');
+  if (data.length === 0) {
+    container.innerHTML = '<div class="results-empty">No component variants found</div>';
+    return;
+  }
+
+  var html = '';
+  for (var i = 0; i < data.length; i++) {
+    var mapping = data[i];
+    html += '<div class="result-item" style="flex-direction:column;align-items:flex-start;gap:4px">';
+    html += '<div style="display:flex;align-items:center;gap:6px">';
+    html += '<strong>' + escHtml(mapping.nodeName) + '</strong>';
+    html += '</div>';
+    html += '<div style="font-size:10px;color:#6b7280">';
+    for (var v = 0; v < mapping.variants.length; v++) {
+      var variant = mapping.variants[v];
+      html += '<span style="margin-right:8px">' + escHtml(variant.property) + ': <strong>' + escHtml(variant.value) + '</strong></span>';
+    }
+    html += '</div>';
+    html += '<div style="font-family:monospace;font-size:10px;color:#4f46e5">';
+    html += escHtml(mapping.cssClasses.join('  '));
+    html += '</div>';
+    html += '</div>';
+  }
+  container.innerHTML = html;
+  setStatus('Found ' + data.length + ' variant mappings');
+}
+
 function renderBEMResults(data: any[]) {
   const container = qs('#bem-results');
   if (data.length === 0) {
@@ -622,6 +826,14 @@ function renderAssetResults(data: any[]) {
       html += '</div>';
     }
 
+    // Alt text suggestion
+    if (asset.altText) {
+      html += '<div class="alt-text-row">';
+      html += '<span class="alt-text-label">Alt:</span>';
+      html += '<input class="alt-text-input" value="' + escHtml(asset.altText) + '" data-node-id="' + asset.nodeId + '">';
+      html += '</div>';
+    }
+
     // Export controls
     var defaultFormat = asset.type === 'icon' || asset.type === 'svg' || asset.type === 'vector' ? 'SVG' : 'PNG';
     html += '<div class="asset-export-row">';
@@ -646,6 +858,7 @@ function renderAssetResults(data: any[]) {
   container.innerHTML = html;
   (qs('#assets-apply') as HTMLButtonElement).disabled = withIssues.length === 0;
   (qs('#assets-export') as HTMLButtonElement).disabled = false;
+  (qs('#assets-export-all') as HTMLButtonElement).disabled = false;
 
   // Update format badge when dropdown changes
   qsa('#assets-results .asset-format-select').forEach(function(sel: any) {
@@ -768,6 +981,46 @@ function renderTokens(data: any) {
     }
   }
 
+  // Spacing issues
+  var spacingIssues = data.spacingIssues || [];
+  if (spacingIssues.length > 0) {
+    html += '<div class="token-section-header" style="color:#b45309">Spacing Issues <span class="token-section-count" style="background:#fef3c7;color:#92400e">' + spacingIssues.length + '</span></div>';
+    for (var sii = 0; sii < spacingIssues.length; sii++) {
+      var si = spacingIssues[sii];
+      html += '<div class="token-item" style="border-left:3px solid #f59e0b">';
+      html += '<div class="token-detail">';
+      html += '<div><strong>' + si.value + 'px</strong> used ' + si.count + 'x &rarr; suggest <strong>' + si.suggestedValue + 'px</strong> (' + escHtml(si.suggestedName) + ')</div>';
+      html += '<div class="token-usage">Off by ' + si.delta + 'px</div>';
+      html += '</div>';
+      html += '</div>';
+    }
+  }
+
+  // Color duplicates
+  var colorDuplicates = data.colorDuplicates || [];
+  if (colorDuplicates.length > 0) {
+    html += '<div class="token-section-header" style="color:#b45309">Near-Duplicate Colors <span class="token-section-count" style="background:#fef3c7;color:#92400e">' + colorDuplicates.length + '</span></div>';
+    for (var cdi = 0; cdi < colorDuplicates.length; cdi++) {
+      var group = colorDuplicates[cdi];
+      html += '<div class="token-item" style="border-left:3px solid #f59e0b">';
+      html += '<div style="display:flex;gap:4px;align-items:center">';
+      for (var gi = 0; gi < group.colors.length; gi++) {
+        var gc = group.colors[gi];
+        html += '<div class="token-swatch" style="background:' + escHtml(gc.value) + '"></div>';
+      }
+      html += '</div>';
+      html += '<div class="token-detail">';
+      var colorLabels: string[] = [];
+      for (var gl = 0; gl < group.colors.length; gl++) {
+        colorLabels.push(escHtml(group.colors[gl].value) + ' (' + group.colors[gl].count + 'x)');
+      }
+      html += '<div>' + colorLabels.join(' &asymp; ') + '</div>';
+      html += '<div class="token-usage">Consolidate to: <strong>' + escHtml(group.suggestedConsolidation) + '</strong></div>';
+      html += '</div>';
+      html += '</div>';
+    }
+  }
+
   qs('#token-results').innerHTML = html;
   (qs('#token-generate') as HTMLButtonElement).disabled = false;
 }
@@ -782,6 +1035,9 @@ window.onmessage = (event: MessageEvent) => {
       case 'cleaner': renderCleanResults(msg.data); break;
       case 'renamer': renderRenameResults(msg.data); break;
       case 'validator': renderValidationReport(msg.data); break;
+      case 'structure': renderStructureSummary(msg.data); break;
+      case 'text-content': renderTextContent(msg.data); break;
+      case 'variants': renderVariantResults(msg.data); break;
       case 'assets': renderAssetResults(msg.data); break;
       case 'tokens': renderTokens(msg.data); break;
       case 'bem': renderBEMResults(msg.data); break;
@@ -793,9 +1049,34 @@ window.onmessage = (event: MessageEvent) => {
     qsa('.btn-primary').forEach(btn => {
       (btn as HTMLButtonElement).disabled = false;
     });
+  } else if (msg.type === 'export-blob') {
+    // Download exported asset
+    try {
+      var uint8 = new Uint8Array(msg.bytes);
+      var mimeType = msg.format === 'svg' ? 'image/svg+xml' : msg.format === 'pdf' ? 'application/pdf' : 'image/' + msg.format;
+      var blob = new Blob([uint8], { type: mimeType });
+      var url = URL.createObjectURL(blob);
+      var a = document.createElement('a');
+      a.href = url;
+      a.download = msg.name + '.' + msg.format;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch (e) {
+      // ignore download error
+    }
+  } else if (msg.type === 'export-progress') {
+    var pct = Math.round((msg.current / msg.total) * 100);
+    qs('#export-progress-bar').style.width = pct + '%';
+    qs('#export-progress-text').textContent = 'Exporting ' + msg.current + '/' + msg.total + '...';
+  } else if (msg.type === 'export-complete') {
+    qs('#export-progress-bar').style.width = '100%';
+    qs('#export-progress-text').textContent = 'Export complete — ' + msg.count + ' assets';
+    setStatus('Export complete');
   } else if (msg.type === 'error') {
-    setStatus(`Error: ${msg.message}`);
+    setStatus('Error: ' + msg.message);
   } else if (msg.type === 'selection-change') {
-    qs('#status-selection').textContent = msg.count > 0 ? `${msg.count} selected` : 'No selection';
+    qs('#status-selection').textContent = msg.count > 0 ? msg.count + ' selected' : 'No selection';
   }
 };

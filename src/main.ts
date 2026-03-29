@@ -7,6 +7,12 @@ import { generateBEMNames, applyBEMNames } from './features/bem-formatter';
 import { extractTokens, formatTokens } from './features/token-preview';
 import { aggregateTokens } from './features/token-aggregator';
 import { scanAssets } from './features/asset-analyzer';
+import { generateStructureSummary } from './features/structure-summary';
+import { checkSpacingConsistency } from './features/spacing-checker';
+import { findColorDuplicates } from './features/color-checker';
+import { extractTextContent } from './features/text-content';
+import { mapVariantsToCSSModifiers } from './features/variant-mapper';
+import { suggestAltText } from './features/alt-text';
 import type { CleanActionItem, RenameAction } from './shared/types';
 
 /**
@@ -170,12 +176,17 @@ async function handleScan(msg: any): Promise<void> {
         };
       }
 
+      var spacingIssues = checkSpacingConsistency(aggregated.spacings);
+      var colorDuplicates = findColorDuplicates(aggregated.colors);
+
       figma.ui.postMessage({
         type: 'scan-result',
         feature: 'tokens',
         data: {
           aggregated: aggregated,
           formatted: formatted,
+          spacingIssues: spacingIssues,
+          colorDuplicates: colorDuplicates,
         },
       });
       break;
@@ -197,6 +208,36 @@ async function handleScan(msg: any): Promise<void> {
           bemName: m.bemName,
           node: m.node,
         })),
+      });
+      break;
+    }
+
+    case 'structure': {
+      var summary = generateStructureSummary(results);
+      figma.ui.postMessage({
+        type: 'scan-result',
+        feature: 'structure',
+        data: summary,
+      });
+      break;
+    }
+
+    case 'text-content': {
+      var textItems = extractTextContent(results);
+      figma.ui.postMessage({
+        type: 'scan-result',
+        feature: 'text-content',
+        data: textItems,
+      });
+      break;
+    }
+
+    case 'variants': {
+      var variantMappings = mapVariantsToCSSModifiers(results);
+      figma.ui.postMessage({
+        type: 'scan-result',
+        feature: 'variants',
+        data: variantMappings,
       });
       break;
     }
@@ -240,6 +281,17 @@ async function handleScan(msg: any): Promise<void> {
           preview: preview,
         });
       }
+      // Generate alt text suggestions
+      var altTexts = suggestAltText(results);
+      var altMap: Record<string, string> = {};
+      for (var ati = 0; ati < altTexts.length; ati++) {
+        altMap[altTexts[ati].nodeId] = altTexts[ati].suggestedAlt;
+      }
+      // Attach alt text to each asset
+      for (var awi = 0; awi < assetsWithPreviews.length; awi++) {
+        assetsWithPreviews[awi].altText = altMap[assetsWithPreviews[awi].nodeId] || '';
+      }
+
       figma.ui.postMessage({
         type: 'scan-result',
         feature: 'assets',
@@ -346,6 +398,45 @@ async function handleApply(msg: any): Promise<void> {
         }
       }
       figma.ui.postMessage({ type: 'apply-result', feature: 'assets', data: assetRenameCount });
+      break;
+    }
+
+    case 'export-all': {
+      var exportAssets = msg.assets || [];
+      var exportTotal = exportAssets.length;
+      for (var exi = 0; exi < exportAssets.length; exi++) {
+        try {
+          var exAsset = exportAssets[exi];
+          var exNode = await figma.getNodeByIdAsync(exAsset.nodeId);
+          if (exNode && 'exportAsync' in exNode) {
+            var exFormat = exAsset.format || 'PNG';
+            var exScale = exAsset.scale || 1;
+            var exportSettings: any = { format: exFormat };
+            if (exFormat !== 'SVG' && exFormat !== 'PDF') {
+              exportSettings.constraint = { type: 'SCALE', value: exScale };
+            }
+            var exBytes = await (exNode as any).exportAsync(exportSettings);
+            var exByteArray: number[] = [];
+            for (var ebi = 0; ebi < exBytes.length; ebi++) {
+              exByteArray.push(exBytes[ebi]);
+            }
+            figma.ui.postMessage({
+              type: 'export-blob',
+              name: exAsset.name || 'asset',
+              format: exFormat.toLowerCase(),
+              bytes: exByteArray,
+            });
+          }
+          figma.ui.postMessage({
+            type: 'export-progress',
+            current: exi + 1,
+            total: exportTotal,
+          });
+        } catch (e) {
+          // Skip failed exports
+        }
+      }
+      figma.ui.postMessage({ type: 'export-complete', count: exportTotal });
       break;
     }
 

@@ -465,6 +465,27 @@
     border-left: 3px solid #f59e0b;
   }
 
+  /* --- Alt Text --- */
+  .alt-text-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-top: 4px;
+  }
+  .alt-text-label {
+    font-size: 10px;
+    color: #6b7280;
+    flex-shrink: 0;
+  }
+  .alt-text-input {
+    flex: 1;
+    padding: 3px 6px;
+    font-size: 10px;
+    border: 1px solid #d1d5db;
+    border-radius: 3px;
+    color: #374151;
+  }
+
   /* --- Export Controls --- */
   .asset-export-row {
     display: flex;
@@ -507,6 +528,22 @@
     font-weight: 500;
   }
 
+  /* --- Structure Summary --- */
+  .structure-stats {
+    display: flex;
+    gap: 12px;
+    flex-wrap: wrap;
+    padding: 8px 12px;
+    background: #f0fdf4;
+    border-radius: 6px;
+    margin-bottom: 8px;
+  }
+  .structure-stat {
+    font-size: 11px;
+    color: #166534;
+  }
+  .structure-stat strong { font-weight: 600; }
+
   /* --- Status Bar --- */
   .status-bar {
     position: fixed;
@@ -532,6 +569,7 @@
     <div class="tab" data-tab="rename">Rename</div>
     <div class="tab" data-tab="validate">Validate</div>
     <div class="tab" data-tab="label">Label</div>
+    <div class="tab" data-tab="variants">Variants</div>
     <div class="tab" data-tab="assets">Assets</div>
     <div class="tab" data-tab="tokens">Tokens</div>
   </div>
@@ -547,6 +585,7 @@
   <div class="view-toggle" id="clean-view-toggle" style="display:none">
     <button class="active" data-view="list">List</button>
     <button data-view="tree">Tree Preview</button>
+    <button class="copy-tree-btn" data-source="clean">Copy Tree</button>
   </div>
   <div class="results" id="clean-results">
     <div class="results-empty">Select frames and click Scan to find removable layers</div>
@@ -567,6 +606,7 @@
   <div class="view-toggle" id="rename-view-toggle" style="display:none">
     <button class="active" data-view="list">List</button>
     <button data-view="tree">Tree Preview</button>
+    <button class="copy-tree-btn" data-source="rename">Copy Tree</button>
   </div>
   <div class="results" id="rename-results">
     <div class="results-empty">Select frames and click Scan to find renamable layers</div>
@@ -601,8 +641,17 @@
   <div class="results" id="validate-empty">
     <div class="results-empty">Select frames and click Validate</div>
   </div>
+  <div id="validate-structure" style="display:none">
+    <div class="structure-stats" id="structure-stats"></div>
+    <div class="tree-view" id="structure-tree"></div>
+  </div>
+  <div id="validate-text-content" style="display:none">
+    <div class="results" id="text-content-results"></div>
+  </div>
   <div class="btn-row">
     <button class="btn btn-secondary" id="validate-scan">Validate</button>
+    <button class="btn btn-secondary" id="structure-scan">Structure</button>
+    <button class="btn btn-secondary" id="text-content-scan">Text</button>
   </div>
 </div>
 
@@ -659,6 +708,17 @@
       <button class="btn btn-primary" id="bem-apply" disabled>Apply BEM</button>
     </div>
   </div>
+
+</div>
+
+<!-- Variants Panel -->
+<div class="panel" id="panel-variants">
+  <div class="results" id="variant-results">
+    <div class="results-empty">Select frames and click Scan to detect component variants and CSS modifier mappings</div>
+  </div>
+  <div class="btn-row">
+    <button class="btn btn-secondary" id="variant-scan">Scan</button>
+  </div>
 </div>
 
 <!-- Assets Panel -->
@@ -675,6 +735,13 @@
     <button class="btn btn-secondary" id="assets-scan">Scan</button>
     <button class="btn btn-primary" id="assets-apply" disabled>Rename Assets</button>
     <button class="btn btn-primary" id="assets-export" disabled>Mark Exportable</button>
+    <button class="btn btn-secondary" id="assets-export-all" disabled>Export All</button>
+  </div>
+  <div id="export-progress" style="display:none;margin-top:8px">
+    <div style="background:#e5e7eb;border-radius:4px;height:6px;overflow:hidden">
+      <div id="export-progress-bar" style="background:#4f46e5;height:100%;width:0%;transition:width 0.2s"></div>
+    </div>
+    <div id="export-progress-text" style="font-size:10px;color:#6b7280;margin-top:4px"></div>
   </div>
 </div>
 

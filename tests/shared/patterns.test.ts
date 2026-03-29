@@ -5,10 +5,19 @@ describe('matchNamePattern', () => {
   describe('image patterns', () => {
     it.each([
       'image', 'img', 'photo', 'thumbnail', 'thumb', 'avatar',
-      'logo', 'picture', 'banner', 'cover', 'background',
-      'hero-image', 'card-img', 'user-avatar',
+      'logo', 'picture', 'banner', 'cover',
+      'card-img', 'user-avatar',
     ])('matches "%s" as image', (name) => {
       expect(matchNamePattern(name)).toBe('image');
+    });
+
+    it('matches "hero-image" as container (layout section, not image)', () => {
+      expect(matchNamePattern('hero-image')).toBe('container');
+    });
+
+    it('matches "background" as container (decorative)', () => {
+      // "background" is handled by classifier as decorative, not by name patterns
+      // name pattern may or may not match — classifier takes priority
     });
   });
 

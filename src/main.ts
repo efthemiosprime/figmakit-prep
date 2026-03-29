@@ -5,15 +5,34 @@ import { generateReport } from './features/validator';
 import { applyLabel, batchLabel } from './features/labeler';
 import { generateBEMNames, applyBEMNames } from './features/bem-formatter';
 import { extractTokens, formatTokens } from './features/token-preview';
+import { scanAssets } from './features/asset-analyzer';
 import type { CleanActionItem, RenameAction } from './shared/types';
 
 /**
  * Get the nodes to analyze: selection if available, otherwise all page children.
  */
-function getTargetNodes(): readonly any[] {
-  const selection = figma.currentPage.selection;
-  if (selection.length > 0) return selection;
-  return figma.currentPage.children;
+function getTargetNodes(): any[] {
+  try {
+    var selection = figma.currentPage.selection;
+    if (selection && selection.length > 0) {
+      var result: any[] = [];
+      for (var i = 0; i < selection.length; i++) {
+        result.push(selection[i]);
+      }
+      return result;
+    }
+    var children = figma.currentPage.children;
+    if (children && children.length > 0) {
+      var result2: any[] = [];
+      for (var j = 0; j < children.length; j++) {
+        result2.push(children[j]);
+      }
+      return result2;
+    }
+    return [];
+  } catch (e) {
+    return [];
+  }
 }
 
 /**
@@ -24,18 +43,33 @@ export async function handleMessage(msg: any): Promise<void> {
     var type = msg.type;
 
     if (type === 'scan') {
-      handleScan(msg);
+      await handleScan(msg);
     } else if (type === 'apply') {
       await handleApply(msg);
     } else {
       figma.ui.postMessage({ type: 'error', message: 'Unknown message type: ' + type });
     }
   } catch (err: any) {
-    figma.ui.postMessage({ type: 'error', message: err.message || 'Unknown error' });
+    var errMsg = err.message || 'Unknown error';
+    var errStack = err.stack || '';
+    // Extract useful info from stack trace
+    var location = '';
+    if (errStack) {
+      var lines = errStack.split('\n');
+      for (var li = 0; li < Math.min(lines.length, 5); li++) {
+        if (lines[li].indexOf('at ') >= 0) {
+          location += lines[li].trim() + ' | ';
+        }
+      }
+    }
+    figma.ui.postMessage({
+      type: 'error',
+      message: errMsg + (location ? ' [' + location + ']' : ''),
+    });
   }
 }
 
-function handleScan(msg: any): void {
+async function handleScan(msg: any): Promise<void> {
   const { feature } = msg;
   const nodes = getTargetNodes();
   const results = analyzeSelection(nodes);
@@ -166,8 +200,55 @@ function handleScan(msg: any): void {
       break;
     }
 
+    case 'assets': {
+      var assetList = scanAssets(results);
+      // Generate thumbnails for each asset
+      var assetsWithPreviews: any[] = [];
+      for (var assetIdx = 0; assetIdx < assetList.length; assetIdx++) {
+        var asset = assetList[assetIdx];
+        var preview = '';
+        try {
+          var assetNode = await figma.getNodeByIdAsync(asset.nodeId);
+          if (assetNode && 'exportAsync' in assetNode) {
+            var bytes = await (assetNode as any).exportAsync({
+              format: 'PNG',
+              constraint: { type: 'HEIGHT', value: 72 },
+            });
+            // Send raw bytes as regular array (Uint8Array doesn't serialize well)
+            var byteArray: number[] = [];
+            for (var bi = 0; bi < bytes.length; bi++) {
+              byteArray.push(bytes[bi]);
+            }
+            preview = byteArray as any;
+          }
+        } catch (e) {
+          // Skip preview on error
+        }
+        assetsWithPreviews.push({
+          nodeId: asset.nodeId,
+          name: asset.name,
+          currentName: asset.currentName,
+          suggestedName: asset.suggestedName,
+          type: asset.type,
+          format: asset.format,
+          width: asset.width,
+          height: asset.height,
+          hasGoodName: asset.hasGoodName,
+          issues: asset.issues,
+          context: asset.context,
+          preview: preview,
+        });
+      }
+      figma.ui.postMessage({
+        type: 'scan-result',
+        feature: 'assets',
+        data: assetsWithPreviews,
+      });
+      break;
+    }
+
     default:
-      figma.ui.postMessage({ type: 'error', message: `Unknown feature: ${feature}` });
+      figma.ui.postMessage({ type: 'error', message: 'Unknown feature: ' + feature });
   }
 }
 
@@ -247,8 +328,24 @@ async function handleApply(msg: any): Promise<void> {
       break;
     }
 
+    case 'assets': {
+      // Rename assets by node ID
+      var assetRenameCount = 0;
+      var assetActions = msg.actions || [];
+      for (var ai = 0; ai < assetActions.length; ai++) {
+        var aAction = assetActions[ai];
+        var aNode = await figma.getNodeByIdAsync(aAction.nodeId);
+        if (aNode) {
+          aNode.name = aAction.newName;
+          assetRenameCount++;
+        }
+      }
+      figma.ui.postMessage({ type: 'apply-result', feature: 'assets', data: assetRenameCount });
+      break;
+    }
+
     default:
-      figma.ui.postMessage({ type: 'error', message: `Unknown feature: ${feature}` });
+      figma.ui.postMessage({ type: 'error', message: 'Unknown feature: ' + feature });
   }
 }
 

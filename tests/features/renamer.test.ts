@@ -68,7 +68,7 @@ describe('generateName', () => {
     expect(generateName(result)).toBe('button');
   });
 
-  it('returns "section" for wide containers', () => {
+  it('returns "section_vstack" for wide vertical containers', () => {
     const node = mockFrameNode({
       name: 'Frame 1',
       width: 1200, height: 600,
@@ -76,7 +76,7 @@ describe('generateName', () => {
       children: [mockTextNode()],
     });
     const result = analyzeNode(node);
-    expect(generateName(result)).toBe('section');
+    expect(generateName(result)).toBe('section_vstack');
   });
 
   it('returns null for already semantic names', () => {

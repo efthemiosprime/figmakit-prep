@@ -135,8 +135,31 @@ $('#bem-apply').addEventListener('click', () => {
   setStatus('Applying BEM...');
 });
 
+// --- Assets Panel ---
+$('#assets-scan').addEventListener('click', function() {
+  setStatus('Scanning assets...');
+  post({ type: 'scan', feature: 'assets' });
+});
+
+$('#assets-apply').addEventListener('click', function() {
+  var inputs = $$('#assets-results .asset-rename input');
+  var actions: any[] = [];
+  inputs.forEach(function(input: any) {
+    var nodeId = input.dataset.nodeId;
+    var newName = input.value.trim();
+    var original = input.dataset.original;
+    if (newName && newName !== original) {
+      actions.push({ nodeId: nodeId, newName: newName });
+    }
+  });
+  if (actions.length > 0) {
+    post({ type: 'apply', feature: 'assets', actions: actions });
+    setStatus('Renaming assets...');
+  }
+});
+
 // --- Token Panel ---
-$('#token-scan').addEventListener('click', () => {
+$('#token-scan').addEventListener('click', function() {
   setStatus('Extracting tokens...');
   post({ type: 'scan', feature: 'tokens' });
 });
@@ -391,6 +414,100 @@ function renderBEMResults(data: any[]) {
   ($('#bem-apply') as HTMLButtonElement).disabled = false;
 }
 
+function renderAssetResults(data: any[]) {
+  $('#assets-summary').style.display = 'flex';
+  var withIssues = data.filter(function(a: any) { return !a.hasGoodName; });
+  $('#assets-total').textContent = String(data.length);
+  $('#assets-issues').textContent = String(withIssues.length);
+  $('#assets-ok').textContent = String(data.length - withIssues.length);
+
+  var container = $('#assets-results');
+  if (data.length === 0) {
+    container.innerHTML = '<div class="results-empty">No exportable assets found</div>';
+    ($('#assets-apply') as HTMLButtonElement).disabled = true;
+    return;
+  }
+
+  var html = '';
+  for (var i = 0; i < data.length; i++) {
+    var asset = data[i];
+    var typeClass = 'asset-type-' + asset.format;
+    var itemClass = asset.hasGoodName ? 'asset-good' : 'asset-bad';
+    var editValue = asset.suggestedName || asset.name;
+
+    // Format dimensions (rounded)
+    var w = Math.round(asset.width || 0);
+    var h = Math.round(asset.height || 0);
+    var sizeStr = '';
+    if (w > 0 && h > 0) {
+      sizeStr = w + ' &times; ' + h + 'px';
+    }
+
+    html += '<div class="asset-item ' + itemClass + '">';
+    html += '<div class="asset-header">';
+
+    // Preview thumbnail — will be filled after render
+    var previewId = 'asset-preview-' + i;
+    if (asset.preview && Array.isArray(asset.preview)) {
+      html += '<img class="asset-preview" id="' + previewId + '" src="" alt="' + escHtml(asset.name) + '">';
+    } else {
+      html += '<div class="asset-preview-placeholder">' + asset.format.toUpperCase() + '</div>';
+    }
+
+    html += '<div class="asset-info">';
+    html += '<div style="display:flex;align-items:center;gap:6px">';
+    html += '<span class="asset-type ' + typeClass + '">' + asset.format.toUpperCase() + '</span>';
+    html += '<span class="result-name">' + escHtml(asset.name) + '</span>';
+    html += '</div>';
+    if (sizeStr) {
+      html += '<div class="asset-size"><span class="asset-size-value">' + sizeStr + '</span></div>';
+    }
+    html += '</div>'; // .asset-info
+    html += '</div>'; // .asset-header
+
+    if (asset.context) {
+      html += '<div class="asset-context">' + escHtml(asset.context) + '</div>';
+    }
+
+    if (asset.issues.length > 0) {
+      html += '<div class="asset-issues">';
+      for (var j = 0; j < asset.issues.length; j++) {
+        html += (j > 0 ? '<br>' : '') + '&#x26A0; ' + escHtml(asset.issues[j]);
+      }
+      html += '</div>';
+    }
+
+    if (!asset.hasGoodName) {
+      html += '<div class="asset-rename">';
+      html += '<span style="color:#6b7280;font-size:10px">Rename:</span>';
+      html += '<input type="text" value="' + escHtml(editValue) + '" data-node-id="' + asset.nodeId + '" data-original="' + escHtml(asset.name) + '">';
+      html += '</div>';
+    }
+
+    html += '</div>';
+  }
+
+  container.innerHTML = html;
+  ($('#assets-apply') as HTMLButtonElement).disabled = withIssues.length === 0;
+
+  // Set preview images from byte arrays → blob URLs
+  for (var pi = 0; pi < data.length; pi++) {
+    var pAsset = data[pi];
+    if (pAsset.preview && Array.isArray(pAsset.preview)) {
+      var imgEl = document.getElementById('asset-preview-' + pi) as HTMLImageElement;
+      if (imgEl) {
+        try {
+          var uint8 = new Uint8Array(pAsset.preview);
+          var blob = new Blob([uint8], { type: 'image/png' });
+          imgEl.src = URL.createObjectURL(blob);
+        } catch (e) {
+          // ignore
+        }
+      }
+    }
+  }
+}
+
 function renderTokens(data: any) {
   if (!data.tokens) {
     $('#token-output').textContent = 'No tokens found. Select a node with styles.';
@@ -410,6 +527,7 @@ window.onmessage = (event: MessageEvent) => {
       case 'cleaner': renderCleanResults(msg.data); break;
       case 'renamer': renderRenameResults(msg.data); break;
       case 'validator': renderValidationReport(msg.data); break;
+      case 'assets': renderAssetResults(msg.data); break;
       case 'tokens': renderTokens(msg.data); break;
       case 'bem': renderBEMResults(msg.data); break;
     }

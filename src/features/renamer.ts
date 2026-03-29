@@ -127,6 +127,7 @@ var STRUCTURAL_NAMES: Record<string, string> = {
   'button': 'button',
   'image': 'image',
   'icon': 'icon',
+  'logo': 'logo',
   'text': 'text',
   'heading': 'heading',
   'header': 'header',
@@ -136,6 +137,11 @@ var STRUCTURAL_NAMES: Record<string, string> = {
   'list': 'list',
   'item': 'list-item',
   'list-item': 'list-item',
+  'nav': 'nav',
+  'menu': 'menu',
+  'main': 'list',
+  'div': 'container',
+  'form': 'form',
 };
 
 function isAutoNamed(name: string): boolean {
@@ -144,6 +150,28 @@ function isAutoNamed(name: string): boolean {
 
 function isSemanticName(name: string): boolean {
   return SEMANTIC_NAMES.includes(name.toLowerCase());
+}
+
+/**
+ * Get layout suffix based on auto-layout direction.
+ * Returns "_vstack" for vertical, "_hstack" for horizontal, "" for none.
+ */
+function getLayoutSuffix(result: AnalysisResult): string {
+  if (result.layoutMode === 'VERTICAL') return '_vstack';
+  if (result.layoutMode === 'HORIZONTAL') return '_hstack';
+  return '';
+}
+
+/**
+ * Add layout suffix to a base name if the node has auto-layout.
+ */
+function withLayoutSuffix(baseName: string, result: AnalysisResult): string {
+  var suffix = getLayoutSuffix(result);
+  // Don't double-suffix if already has _vstack/_hstack
+  if (baseName.indexOf('_vstack') >= 0 || baseName.indexOf('_hstack') >= 0) return baseName;
+  // Don't add suffix to roles that imply direction already
+  if (baseName === 'row' || baseName === 'vstack' || baseName === 'hstack') return baseName;
+  return baseName + suffix;
 }
 
 function getHeadingLevel(fontSize: number): number {
@@ -180,6 +208,12 @@ export function generateName(result: AnalysisResult, parentRole?: NodeRole): str
   // Don't rename component definitions
   if (type === 'COMPONENT') return null;
 
+  // Don't rename layers with (skip) or (ignore) markers
+  if (name.indexOf('(skip)') >= 0 || name.indexOf('(ignore)') >= 0) return null;
+
+  // Don't rename layers that are already marked as decorative
+  if (role === 'background-shape') return null;
+
   // "Heading N" frames are wrappers (classified as wrapper by classifier)
   // Don't rename them — they will be flattened instead.
   // "Heading" without number → just lowercase
@@ -187,9 +221,85 @@ export function generateName(result: AnalysisResult, parentRole?: NodeRole): str
     return 'heading';
   }
 
+  // "Div" → "container"
+  if (/^div$/i.test(name)) return 'container';
+
+  // Logo patterns → "logo"
+  if (/logo/i.test(name) && name.toLowerCase() !== 'logo') return 'logo';
+
+  // "CTA Section" → "cta"
+  if (/^cta[-_\s]section/i.test(name)) return 'cta';
+
+  // "Hero Image", "Footer Image", "Content + image" → "section" (layout containers, not images)
+  if (/^(hero|content|leadership|about)[-_\s+]image/i.test(name)) return 'section';
+  if (/^footer[-_\s]image/i.test(name)) return 'footer';
+
+  // CamelCase section names: "LeadershipSection" → "section"
+  if (/section$/i.test(name) && name.toLowerCase() !== 'section') return 'section';
+
+  // Names ending in "card" with prefix: "What-we-do card" → "card"
+  if (/\bcard\b(\/\w+)*$/i.test(name) && name.toLowerCase() !== 'card') return 'card';
+
+  // "Navlink" → "list-item"
+  if (/^navlink/i.test(name)) return 'list-item';
+
+  // Page wrappers: "1.0_Something_Desktop" → "section"
+  if (/^\d+\.\d+[-_\s]/.test(name)) return withLayoutSuffix('section', result);
+
+  // "primary_nav" → "header"
+  if (/^primary[-_\s]?nav/i.test(name)) return 'header';
+
+  // "highlighted text" → "text"
+  if (/^highlighted[-_\s]?text$/i.test(name)) return 'text';
+
+  // "copy chunk" → "content_vstack"
+  if (/^copy[-_\s]?chunk$/i.test(name)) return withLayoutSuffix('container', result);
+
+  // "Footnote" → "text"
+  if (/^footnote$/i.test(name)) return 'text';
+
+  // "Stat", "85-percent" → container
+  if (/^stat$/i.test(name) || /^\d+[-_]?percent$/i.test(name)) return withLayoutSuffix('container', result);
+
+  // "icon.Something" → "icon"
+  if (/^icon\./i.test(name)) return 'icon';
+
+  // "module-left", "module-right" → card with layout suffix
+  if (/^module[-_](left|right)/i.test(name)) return withLayoutSuffix('card', result);
+
+  // "module-CRM-signup", "module-signup" → cta
+  if (/^module[-_]?(cta|signup|sign[-_]?up|crm)/i.test(name)) return 'cta';
+
+  // "website-header-nav" → "header"
+  if (/^website[-_]header/i.test(name)) return 'header';
+
+  // "body" as container (not text) — when it's a frame with children
+  if (/^body$/i.test(name) && result.children.length > 0) return withLayoutSuffix('container', result);
+
+  // "FPO" → "image" (For Placement Only)
+  if (/^fpo$/i.test(name)) return 'image';
+
+  // Strip Figma variant suffixes: "quiz/Default" → "quiz", "card/desktop" → "card"
+  var slashIdx = name.indexOf('/');
+  if (slashIdx > 0) {
+    var basePart = name.substring(0, slashIdx).trim().toLowerCase();
+    if (basePart.length > 0) {
+      var strippedLower = getStructuralLowercase(basePart.charAt(0).toUpperCase() + basePart.slice(1));
+      if (strippedLower) return strippedLower;
+      // Return the base part without the variant suffix
+      return basePart;
+    }
+  }
+
   // Check if it's a structural name that just needs lowercasing
   var lowered = getStructuralLowercase(name);
-  if (lowered) return lowered;
+  if (lowered) {
+    // Add layout suffix for containers and sections
+    if (lowered === 'container' || lowered === 'section' || lowered === 'group') {
+      return withLayoutSuffix(lowered, result);
+    }
+    return lowered;
+  }
 
   // Don't rename already-correct semantic names (already lowercase)
   if (isSemanticName(name) && name === name.toLowerCase()) return null;
@@ -224,7 +334,11 @@ export function generateName(result: AnalysisResult, parentRole?: NodeRole): str
     return 'h' + level;
   }
 
-  return ROLE_TO_NAME[role] || null;
+  var baseName = ROLE_TO_NAME[role] || null;
+  if (baseName && (baseName === 'section' || role === 'flex-row' || role === 'flex-col')) {
+    return withLayoutSuffix(baseName, result);
+  }
+  return baseName;
 }
 
 /**

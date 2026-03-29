@@ -8,20 +8,20 @@ import {
   FEATURE_MAX_WIDTH,
   FINGERPRINT_UNIFORMITY_THRESHOLD,
 } from '../shared/constants';
+import { safeGetFills, safeGetChildren, safeGetNumber, safeGetString } from '../shared/figma-helpers';
 
-const HEADING_NAME_PATTERN = /\b(h[1-6]|heading|headline|title)\b/i;
-const BUTTON_NAME_PATTERN = /\b(button|btn|cta)\b/i;
-const IMAGE_NAME_PATTERN = /\b(image|img|photo|thumbnail|thumb|avatar|logo|picture|banner|cover)\b/i;
+var HEADING_NAME_PATTERN = /\b(h[1-6]|heading|headline|title)\b/i;
+var BUTTON_NAME_PATTERN = /\b(button|btn|cta)\b/i;
+var IMAGE_NAME_PATTERN = /\b(image|img|photo|thumbnail|thumb|avatar|logo|picture|banner|cover)\b/i;
 
-const FINGERPRINT_HEADING_MIN_SIZE = 22;
+var FINGERPRINT_HEADING_MIN_SIZE = 22;
 
-/**
- * Check if a node has any visible fills of type IMAGE.
- */
 function hasImageFill(node: any): boolean {
-  const fills = node.fills;
-  if (!Array.isArray(fills)) return false;
-  return fills.some((f: any) => f.type === 'IMAGE' && f.visible !== false);
+  var fills = safeGetFills(node);
+  for (var i = 0; i < fills.length; i++) {
+    if (fills[i].type === 'IMAGE' && fills[i].visible !== false) return true;
+  }
+  return false;
 }
 
 /**
@@ -29,44 +29,38 @@ function hasImageFill(node: any): boolean {
  * Returns a semantic category: 'button', 'image', 'icon', 'heading', 'text', 'container', or 'other'.
  */
 function classifyChild(child: any): string {
-  const type: string = child.type ?? '';
-  const name: string = child.name ?? '';
-  const width: number = child.width ?? 0;
-  const height: number = child.height ?? 0;
+  var type = safeGetString(child, 'type', '');
+  var name = safeGetString(child, 'name', '');
+  var width = safeGetNumber(child, 'width', 0);
+  var height = safeGetNumber(child, 'height', 0);
 
-  // Check button by nodeRole or name
-  const classification = classifyNode(child);
+  var classification = classifyNode(child);
   if (classification.role === 'button' || BUTTON_NAME_PATTERN.test(name)) {
     return 'button';
   }
 
-  // Check image (IMAGE fill or image-named)
   if (hasImageFill(child) || IMAGE_NAME_PATTERN.test(name)) {
-    // Small images are icons
     if (width > 0 && height > 0 && width <= ICON_MAX_SIZE && height <= ICON_MAX_SIZE) {
       return 'icon';
     }
     return 'image';
   }
 
-  // Check vector/shape types → icon
-  const shapeTypes = ['VECTOR', 'BOOLEAN_OPERATION', 'STAR', 'POLYGON', 'ELLIPSE'];
-  if (shapeTypes.includes(type) || classification.role === 'icon') {
+  var shapeTypes = ['VECTOR', 'BOOLEAN_OPERATION', 'STAR', 'POLYGON', 'ELLIPSE'];
+  if (shapeTypes.indexOf(type) >= 0 || classification.role === 'icon') {
     return 'icon';
   }
 
-  // Check text
   if (type === 'TEXT') {
-    const fontSize: number = child.fontSize ?? 16;
+    var fontSize = safeGetNumber(child, 'fontSize', 16);
     if (fontSize >= FINGERPRINT_HEADING_MIN_SIZE || HEADING_NAME_PATTERN.test(name)) {
       return 'heading';
     }
     return 'text';
   }
 
-  // Check container (frame/group with children)
-  const containerTypes = ['FRAME', 'GROUP', 'INSTANCE', 'COMPONENT'];
-  if (containerTypes.includes(type) && Array.isArray(child.children) && child.children.length > 0) {
+  var containerTypes = ['FRAME', 'GROUP', 'INSTANCE', 'COMPONENT'];
+  if (containerTypes.indexOf(type) >= 0 && safeGetChildren(child).length > 0) {
     return 'container';
   }
 
@@ -135,8 +129,8 @@ export function matchFingerprint(
 ): Classification | null {
   if (!fingerprint) return null;
 
-  const w = fingerprint.parentWidth || (node.width ?? 0);
-  const h = fingerprint.parentHeight || (node.height ?? 0);
+  var w = fingerprint.parentWidth || safeGetNumber(node, 'width', 0);
+  var h = fingerprint.parentHeight || safeGetNumber(node, 'height', 0);
   const nodeHasImageFill = fingerprint.hasImageFill || hasImageFill(node);
 
   const { total, images, texts, headings, buttons, icons, containers, allSameType } = fingerprint;

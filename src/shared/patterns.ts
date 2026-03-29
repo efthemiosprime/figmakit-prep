@@ -14,22 +14,45 @@ export const NAME_PATTERNS: NamePattern[] = [
   { pattern: /^card[-_](footer|actions|cta|button|btn)$/i, role: 'button' },
   { pattern: /^card[-_](title)$/i, role: 'heading' },
 
-  // Card (negative lookahead for sub-elements and BEM)
+  // Card patterns — "card" anywhere, with prefix or suffix or variant
+  // "What-we-do card", "Leadership card/desktop", "card/Default"
   {
-    pattern: /^card(?![-_](?:header|content|body|footer|actions|cta|image|img|title|text|description|button|btn))(?!__)([-_]\w+)?$/i,
+    pattern: /^card(?![-_](?:header|content|body|footer|actions|cta|image|img|title|text|description|button|btn))(?!__)([-_/]\w+)*$/i,
     role: 'card',
   },
+  { pattern: /\bcard\b(\/\w+)*$/i, role: 'card' },
 
-  // Image patterns
-  { pattern: /\b(image|img|photo|thumbnail|thumb|avatar|logo|icon|svg|picture|banner|cover|background)\b/i, role: 'image' },
+  // CTA Section / CTA patterns (before generic section/image patterns)
+  { pattern: /^cta[-_\s]section/i, role: 'cta' },
+  { pattern: /^(cta|call[-_\s]?to[-_\s]?action)([-_\s/].*)?$/i, role: 'cta' },
+
+  // Section patterns with "Image/Footer/Content" suffix — these are layout sections, not images
+  // "Hero Image" = section (has children), "Footer Image" = footer, "Content + image" = section
+  { pattern: /^footer[-_\s]image/i, role: 'container' },
+  { pattern: /^(hero|content|leadership|about)[-_\s+]image/i, role: 'container' },
+  { pattern: /\bsection$/i, role: 'container' },
+
+  // Icon patterns — names ending in "-icon", "_icon", "button_icon", etc.
+  { pattern: /[-_]icon$/i, role: 'icon' },
+  { pattern: /^icon[-_\s]?system/i, role: 'icon' },
+
+  // Image patterns — only for leaf-level image names (not "X Image" sections)
+  // Exact or standalone image keywords
+  { pattern: /^(image|img|photo|thumbnail|thumb|avatar|picture|banner|cover)$/i, role: 'image' },
+  { pattern: /^(image|img|photo|thumbnail|thumb|avatar|picture|banner|cover)[-_\s]/i, role: 'image' },
+  { pattern: /[-_\s](image|img|photo|thumbnail|thumb|avatar|picture|banner|cover)$/i, role: 'image' },
+  // Logo — always image
+  { pattern: /\blogo\b/i, role: 'image' },
+  // SVG — always image
+  { pattern: /^svg$/i, role: 'image' },
+
+  // Navlink → list-item
+  { pattern: /^navlink([-_\s/].*)?$/i, role: 'list-item' },
 
   // Heading level patterns (h1-h6)
   { pattern: /\bh[1-6]\b/i, role: 'heading' },
   // Generic heading patterns
   { pattern: /^(heading|title)/i, role: 'heading' },
-
-  // CTA (before button, since "cta" would also match button)
-  { pattern: /^(cta|call[-_\s]?to[-_\s]?action)([-_\s/].*)?$/i, role: 'cta' },
 
   // Button group (before single button)
   { pattern: /^buttons([-_\s/].*)?$|^button[-_]group([-_\s/].*)?$/i, role: 'buttons' },
@@ -57,10 +80,32 @@ export const NAME_PATTERNS: NamePattern[] = [
   { pattern: /^group([-_\s/].*)?$/i, role: 'group' },
 
   // Container-like patterns
-  { pattern: /^(container|wrapper|frame|box|panel|block|layout|section)([-_\s/].*)?$/i, role: 'container' },
+  { pattern: /^(container|wrapper|frame|box|panel|block|layout|section|div)([-_\s/].*)?$/i, role: 'container' },
+
+  // Module patterns → CTA or card or container
+  { pattern: /^module[-_\s]?(cta|signup|sign[-_]?up|crm)([-_\s/].*)?$/i, role: 'cta' },
+  { pattern: /^module[-_\s]?(left|right)([-_\s/].*)?$/i, role: 'card' },
+  { pattern: /^module([-_\s/].*)?$/i, role: 'container' },
+
+  // Website/primary header
+  { pattern: /^website[-_\s]?header([-_\s/].*)?$/i, role: 'header' },
+  { pattern: /^primary[-_\s]?nav([-_\s/].*)?$/i, role: 'header' },
+
+  // Footnote / copy chunk → text
+  { pattern: /^(footnote|copy[-_\s]?chunk)([-_\s/].*)?$/i, role: 'text' },
+
+  // Icon with dot notation: "icon.Something"
+  { pattern: /^icon\..+$/i, role: 'icon' },
+
+  // Stats/percent → container
+  { pattern: /^(stat|stats)([-_\s/].*)?$/i, role: 'container' },
+  { pattern: /^\d+[-_]?percent([-_\s/].*)?$/i, role: 'container' },
+
+  // Form patterns (not natively mapped — mark as container)
+  { pattern: /^(form|field|input|textarea|select|checkbox|radio)([-_\s/].*)?$/i, role: 'container' },
 
   // List / list items
-  { pattern: /^(list|nav[-_\s]?list|menu)([-_\s/].*)?$/i, role: 'list' },
+  { pattern: /^(list|nav[-_\s]?list|menu|main|right)([-_\s/].*)?$/i, role: 'list' },
   { pattern: /^(item|list[-_\s]?item|menu[-_\s]?item|nav[-_\s]?item)([-_\s/].*)?$/i, role: 'list-item' },
 
   // Divider

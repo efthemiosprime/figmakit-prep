@@ -10,54 +10,51 @@ import {
   HEADING_MIN_FONT_SIZE,
   HEADING_MIN_FONT_WEIGHT,
 } from '../shared/constants';
+import { safeGetFills, safeGetStrokes, safeGetEffects, safeGetChildren, safeGetNumber, safeGetString } from '../shared/figma-helpers';
 
-/**
- * Check if a node has any visible fills of a given type.
- */
 function hasVisibleFillOfType(node: any, type: string): boolean {
-  const fills = node.fills;
-  if (!Array.isArray(fills)) return false;
-  return fills.some((f: any) => f.type === type && f.visible !== false);
+  var fills = safeGetFills(node);
+  for (var i = 0; i < fills.length; i++) {
+    if (fills[i].type === type && fills[i].visible !== false) return true;
+  }
+  return false;
 }
 
-/**
- * Check if a node has any visible fills (of any type).
- */
 function hasAnyVisibleFill(node: any): boolean {
-  const fills = node.fills;
-  if (!Array.isArray(fills)) return false;
-  return fills.some((f: any) => f.visible !== false);
+  var fills = safeGetFills(node);
+  for (var i = 0; i < fills.length; i++) {
+    if (fills[i].visible !== false) return true;
+  }
+  return false;
 }
 
-/**
- * Check if a node has any visible strokes.
- */
 function hasAnyVisibleStroke(node: any): boolean {
-  const strokes = node.strokes;
-  if (!Array.isArray(strokes)) return false;
-  return strokes.some((s: any) => s.visible !== false);
+  var strokes = safeGetStrokes(node);
+  for (var i = 0; i < strokes.length; i++) {
+    if (strokes[i].visible !== false) return true;
+  }
+  return false;
 }
 
-/**
- * Check if a node has any visible effects.
- */
 function hasAnyVisibleEffect(node: any): boolean {
-  const effects = node.effects;
-  if (!Array.isArray(effects)) return false;
-  return effects.some((e: any) => e.visible !== false);
+  var effects = safeGetEffects(node);
+  for (var i = 0; i < effects.length; i++) {
+    if (effects[i].visible !== false) return true;
+  }
+  return false;
 }
 
 function hasPadding(node: any): boolean {
   return (
-    (node.paddingTop ?? 0) > 0 ||
-    (node.paddingRight ?? 0) > 0 ||
-    (node.paddingBottom ?? 0) > 0 ||
-    (node.paddingLeft ?? 0) > 0
+    safeGetNumber(node, 'paddingTop', 0) > 0 ||
+    safeGetNumber(node, 'paddingRight', 0) > 0 ||
+    safeGetNumber(node, 'paddingBottom', 0) > 0 ||
+    safeGetNumber(node, 'paddingLeft', 0) > 0
   );
 }
 
 function getChildCount(node: any): number {
-  return Array.isArray(node.children) ? node.children.length : 0;
+  return safeGetChildren(node).length;
 }
 
 function isContainerType(type: string): boolean {
@@ -78,16 +75,36 @@ function result(role: NodeRole, confidence: number, source: Classification['sour
  */
 function isDecorativeLayer(name: string): boolean {
   var lower = name.toLowerCase();
+
+  // Explicit skip/ignore markers
+  if (lower.indexOf('(skip)') >= 0 || lower.indexOf('(ignore)') >= 0) return true;
+
   // Exact decorative names
-  if (lower === 'shadow' || lower === 'border' || lower === 'overlay') return true;
-  // Separator patterns: :shadow, +shadow, :border, +border, :margin
-  if (lower.indexOf(':shadow') >= 0 || lower.indexOf('+shadow') >= 0) return true;
-  if (lower.indexOf(':border') >= 0 || lower.indexOf('+border') >= 0) return true;
-  if (lower.indexOf(':margin') >= 0) return true;
+  var decorativeExact = [
+    'shadow', 'border', 'overlay', 'blur', 'stroke', 'mask',
+    'gradient', 'effect', 'glow', 'noise', 'texture',
+    'decoration', 'ornament', 'bg',
+    'horizontalborder', 'verticalborder',
+  ];
+  for (var i = 0; i < decorativeExact.length; i++) {
+    if (lower === decorativeExact[i]) return true;
+  }
+
+  // Suffix/separator patterns: :shadow, +shadow, :blur, +overlay, etc.
+  var decorativeSuffixes = [
+    ':shadow', '+shadow', ':border', '+border', ':margin',
+    ':blur', '+blur', ':overlay', '+overlay',
+    ':effect', '+effect', ':glow', '+glow',
+  ];
+  for (var j = 0; j < decorativeSuffixes.length; j++) {
+    if (lower.indexOf(decorativeSuffixes[j]) >= 0) return true;
+  }
+
   // Combined decorative names
   if (lower.indexOf('background+border') >= 0) return true;
-  // Border separators
-  if (lower === 'horizontalborder' || lower === 'verticalborder') return true;
+  if (lower.indexOf('overlay+border') >= 0) return true;
+  if (lower.indexOf('overlayblur') >= 0) return true;
+
   return false;
 }
 
@@ -95,7 +112,8 @@ function isDecorativeLayer(name: string): boolean {
  * Check if a node name matches "Background" — a common decorative wrapper.
  */
 function isBackgroundName(name: string): boolean {
-  return name.toLowerCase() === 'background';
+  var lower = name.toLowerCase();
+  return lower === 'background' || lower === 'bg';
 }
 
 /**
@@ -112,22 +130,22 @@ function getHeadingFromName(name: string): number {
  * Check if all children of a node are button-appropriate (TEXT or small icons).
  */
 function allChildrenAreButtonContent(node: any): boolean {
-  var children = node.children;
-  if (!Array.isArray(children) || children.length === 0) return false;
+  var children = safeGetChildren(node);
+  if (children.length === 0) return false;
   for (var i = 0; i < children.length; i++) {
     var child = children[i];
-    var childType = child.type || '';
+    var childType = safeGetString(child, 'type', '');
     // TEXT is always fine in a button
     if (childType === 'TEXT') continue;
     // Small vectors/shapes are icons — fine in a button
+    var cw = safeGetNumber(child, 'width', 0);
+    var ch = safeGetNumber(child, 'height', 0);
     var isSmallShape = (childType === 'VECTOR' || childType === 'BOOLEAN_OPERATION' ||
       childType === 'STAR' || childType === 'POLYGON' || childType === 'ELLIPSE') &&
-      (child.width || 0) <= ICON_MAX_SIZE && (child.height || 0) <= ICON_MAX_SIZE;
+      cw <= ICON_MAX_SIZE && ch <= ICON_MAX_SIZE;
     if (isSmallShape) continue;
     // Small frames with image fill can be icons too
-    var childW = child.width || 0;
-    var childH = child.height || 0;
-    if (childW <= ICON_MAX_SIZE && childH <= ICON_MAX_SIZE) continue;
+    if (cw <= ICON_MAX_SIZE && ch <= ICON_MAX_SIZE) continue;
     // Anything else = not a button
     return false;
   }
@@ -153,16 +171,73 @@ function allChildrenAreButtonContent(node: any): boolean {
  * 11. Default → container
  */
 export function classifyNode(node: any): Classification {
-  var type: string = node.type;
-  var width: number = node.width != null ? node.width : 0;
-  var height: number = node.height != null ? node.height : 0;
+  var type: string = safeGetString(node, 'type', '');
+  var width: number = safeGetNumber(node, 'width', 0);
+  var height: number = safeGetNumber(node, 'height', 0);
   var childCount = getChildCount(node);
-  var layoutMode: string = node.layoutMode != null ? node.layoutMode : 'NONE';
-  var name: string = node.name != null ? node.name : '';
+  var layoutMode: string = safeGetString(node, 'layoutMode', 'NONE');
+  var name: string = safeGetString(node, 'name', '');
 
-  // 0. Decorative layers — skip (high confidence to override name patterns)
+  // 0. Skip/ignore markers and decorative layers (high confidence to override name patterns)
   if (isDecorativeLayer(name)) {
     return result('background-shape', 95, 'type');
+  }
+
+  // 0a. "(skip)" or "(ignore)" in name → invisible to FigmaKit
+  if (name.indexOf('(skip)') >= 0 || name.indexOf('(ignore)') >= 0) {
+    return result('invisible', 95, 'type');
+  }
+
+  // 0a2. Decorative rectangles: "Rectangle N" (auto-named, no children, no image fill, large enough to be bg)
+  if (childCount === 0 && /^Rectangle\s+\d+$/i.test(name) && !hasVisibleFillOfType(node, 'IMAGE')) {
+    var rw = safeGetNumber(node, 'width', 0);
+    var rh = safeGetNumber(node, 'height', 0);
+    // Only skip large rectangles (likely backgrounds), not small ones (could be dividers)
+    if (rw > 64 && rh > 64) {
+      return result('background-shape', 90, 'type');
+    }
+  }
+
+  // 0a3. Mask/clipping layers — exact "Mask group" or "masked X"
+  if (/^mask\s+group$/i.test(name) || /^masked\s/i.test(name)) {
+    return result('background-shape', 90, 'type');
+  }
+
+  // 0a4. Empty bracket layers "[ ]", "[]"
+  if (/^\[[\s]*\]$/.test(name.trim())) {
+    return result('background-shape', 90, 'type');
+  }
+
+  // 0a5. FPO (For Placement Only) → placeholder image
+  if (/^fpo$/i.test(name.trim())) {
+    return result('image', 90, 'type');
+  }
+
+  // 0a6. Page/version wrappers: "1.0_Something_Desktop", "2.0 - Page Name"
+  if (/^\d+\.\d+[-_\s]/.test(name) && isContainerType(type) && childCount > 0) {
+    return result('container', 85, 'type');
+  }
+
+  // 0a7. "highlighted text" → text (not button)
+  if (/^highlighted[-_\s]?text$/i.test(name)) {
+    return result('text', 90, 'type');
+  }
+
+  // 0a8. Scientific/diagram names → skip (complex graphics, export as image)
+  var diagramPatterns = [
+    /^(IgG|MuSK|LRP4|AChR|NM[-_]?\d)/i,
+    /autoantibod/i,
+    /^acetylcholine/i,
+    /^floating\s/i,
+    /^MOA[-_]?(Desktop|Mobile|\d)/i,
+    /^carousel[-_]?nav/i,
+    /^breadcrumb/i,
+    /^pie[-_\s]?chart/i,
+  ];
+  for (var dp = 0; dp < diagramPatterns.length; dp++) {
+    if (diagramPatterns[dp].test(name)) {
+      return result('background-shape', 90, 'type');
+    }
   }
 
   // 0b. "Background" named leaf nodes (no children) → background-shape (decorative)
@@ -175,7 +250,7 @@ export function classifyNode(node: any): Classification {
   // The actual heading is the TEXT child inside, not the frame itself
   var headingLevel = getHeadingFromName(name);
   if (headingLevel >= 0 && isContainerType(type) && childCount === 1) {
-    var onlyChild = node.children[0];
+    var onlyChild = safeGetChildren(node)[0];
     if (onlyChild && onlyChild.type === 'TEXT') {
       // This is a heading wrapper — mark as wrapper so it gets flattened
       return result('wrapper', 90, 'type');
@@ -216,8 +291,8 @@ export function classifyNode(node: any): Classification {
 
   // 1. TEXT nodes
   if (type === 'TEXT') {
-    var fontSize: number = node.fontSize != null ? node.fontSize : 16;
-    var fontWeight: number = node.fontWeight != null ? node.fontWeight : 400;
+    var fontSize: number = safeGetNumber(node, 'fontSize', 16);
+    var fontWeight: number = safeGetNumber(node, 'fontWeight', 400);
     if (fontSize >= HEADING_MIN_FONT_SIZE || fontWeight >= HEADING_MIN_FONT_WEIGHT) {
       return result('heading', 90, 'type');
     }
@@ -253,7 +328,7 @@ export function classifyNode(node: any): Classification {
     var hasFill = hasAnyVisibleFill(node);
     var hasStroke = hasAnyVisibleStroke(node);
     var hasEffects = hasAnyVisibleEffect(node);
-    var cornerRadius = node.cornerRadius != null ? node.cornerRadius : 0;
+    var cornerRadius = safeGetNumber(node, 'cornerRadius', 0);
     var hasLayout = layoutMode !== 'NONE';
 
     // 6. Button heuristic (tightened):

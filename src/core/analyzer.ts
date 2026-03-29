@@ -185,11 +185,17 @@ export function analyzeNode(node: any, depth: number = 0): AnalysisResult {
     best = nameClassification;
   }
 
-  // 5. Safety assessment
-  const removeAssessment = canRemove(node);
+  // 5. Safety assessment — strict, only remove what's truly safe
+  var removeAssessment = canRemove(node);
+  // canRemove already checks: hidden, zero opacity, redundant mask, empty container
+  // Do NOT override canRemove for decorative layers — let the base check decide
+  // A "Background" rectangle with a fill is kept (canRemove returns false for has-fill)
+  // Only truly empty/hidden nodes get removed
   const flattenAssessment = canFlatten(node);
   const redundantAssessment = isRedundantNesting(node);
-  // canFlatten OR redundant nesting — either makes it flattenable
+  // Only flatten if safety checks pass — never bypass them
+  // classifiedAsWrapper is only used if the node also passes redundant nesting checks
+  // (single child, no fill, no stroke, no effects, no corner radius)
   const isFlattenable = flattenAssessment.safe || redundantAssessment.safe;
 
   // 6. Suggested name (only for auto-generated names)

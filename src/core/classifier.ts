@@ -165,8 +165,9 @@ export function classifyNode(node: any): Classification {
     return result('background-shape', 95, 'type');
   }
 
-  // 0b. "Background" named containers → background-shape (not button/image)
-  if (isBackgroundName(name) && isContainerType(type) && childCount >= 0) {
+  // 0b. "Background" named leaf nodes (no children) → background-shape (decorative)
+  // "Background" with children is a styled container, keep as container
+  if (isBackgroundName(name) && childCount === 0) {
     return result('background-shape', 85, 'type');
   }
 

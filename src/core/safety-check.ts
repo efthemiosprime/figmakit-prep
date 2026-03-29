@@ -89,8 +89,17 @@ export function canRemove(node: any): SafetyAssessment {
     return { safe: false, reason: 'has-visual-contribution' };
   }
 
-  // Empty container with no visual contribution
+  // Empty container — only safe to remove if truly empty (no layout/visual properties)
   if (getChildCount(node) === 0) {
+    if (hasPadding(node)) {
+      return { safe: false, reason: 'has-padding' };
+    }
+    if ((node.itemSpacing || 0) > 0) {
+      return { safe: false, reason: 'has-gap' };
+    }
+    if ((node.cornerRadius || 0) > 0) {
+      return { safe: false, reason: 'has-corner-radius' };
+    }
     return { safe: true, reason: 'empty-container' };
   }
 
@@ -180,6 +189,12 @@ export function isRedundantNesting(node: any): SafetyAssessment {
   }
   if ((node.cornerRadius || 0) > 0) {
     return { safe: false, reason: 'has-corner-radius' };
+  }
+  if (hasPadding(node)) {
+    return { safe: false, reason: 'has-padding' };
+  }
+  if ((node.itemSpacing || 0) > 0) {
+    return { safe: false, reason: 'has-gap' };
   }
 
   return { safe: true, reason: 'redundant-nesting' };

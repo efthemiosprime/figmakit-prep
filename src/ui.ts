@@ -44,20 +44,26 @@ function confBadge(confidence: number): string {
   return `<span class="result-confidence ${cls}">${confidence}%</span>`;
 }
 
-// --- Rename view toggle ---
+// --- View toggle handler (shared for clean + rename) ---
 document.addEventListener('click', function(e) {
   var target = e.target as HTMLElement;
-  if (target.parentElement && target.parentElement.id === 'rename-view-toggle') {
+  if (!target.parentElement) return;
+  var parentId = target.parentElement.id;
+
+  if (parentId === 'rename-view-toggle') {
     var view = target.dataset.view;
     $$('#rename-view-toggle button').forEach(function(b) { b.classList.remove('active'); });
     target.classList.add('active');
-    if (view === 'tree') {
-      $('#rename-results').style.display = 'none';
-      $('#rename-tree').style.display = 'block';
-    } else {
-      $('#rename-results').style.display = 'block';
-      $('#rename-tree').style.display = 'none';
-    }
+    $('#rename-results').style.display = view === 'tree' ? 'none' : 'block';
+    $('#rename-tree').style.display = view === 'tree' ? 'block' : 'none';
+  }
+
+  if (parentId === 'clean-view-toggle') {
+    var cleanView = target.dataset.view;
+    $$('#clean-view-toggle button').forEach(function(b) { b.classList.remove('active'); });
+    target.classList.add('active');
+    $('#clean-results').style.display = cleanView === 'tree' ? 'none' : 'block';
+    $('#clean-tree').style.display = cleanView === 'tree' ? 'block' : 'none';
   }
 });
 
@@ -67,15 +73,15 @@ $('#clean-scan').addEventListener('click', () => {
   post({ type: 'scan', feature: 'cleaner' });
 });
 
-$('#clean-apply').addEventListener('click', () => {
+$('#clean-apply').addEventListener('click', function() {
   if (!currentFeatureData) return;
-  const checked = Array.from($$('#clean-results input[type="checkbox"]:checked'));
-  const actions = checked.map((cb: any) => {
-    const idx = parseInt(cb.dataset.index);
-    const item = currentFeatureData.all[idx];
-    return { nodeId: item.id, node: item.node, action: item.canRemove ? 'remove' : 'flatten', reason: item.removeReason ?? 'flatten' };
+  var checked = Array.from($$('#clean-results input[type="checkbox"]:checked'));
+  var actions = checked.map(function(cb: any) {
+    var idx = parseInt(cb.dataset.index);
+    var item = currentFeatureData.all[idx];
+    return { nodeId: item.id, action: item.canRemove ? 'remove' : 'flatten' };
   });
-  post({ type: 'apply', feature: 'cleaner', actions });
+  post({ type: 'apply', feature: 'cleaner', actions: actions });
   setStatus('Cleaning...');
 });
 
@@ -85,14 +91,15 @@ $('#rename-scan').addEventListener('click', () => {
   post({ type: 'scan', feature: 'renamer' });
 });
 
-$('#rename-apply').addEventListener('click', () => {
+$('#rename-apply').addEventListener('click', function() {
   if (!currentFeatureData) return;
-  const checked = Array.from($$('#rename-results input[type="checkbox"]:checked'));
-  const actions = checked.map((cb: any) => {
-    const idx = parseInt(cb.dataset.index);
-    return currentFeatureData[idx];
+  var checked = Array.from($$('#rename-results input[type="checkbox"]:checked'));
+  var actions = checked.map(function(cb: any) {
+    var idx = parseInt(cb.dataset.index);
+    var item = currentFeatureData[idx];
+    return { nodeId: item.nodeId, suggestedName: item.suggestedName };
   });
-  post({ type: 'apply', feature: 'renamer', actions });
+  post({ type: 'apply', feature: 'renamer', actions: actions });
   setStatus('Renaming...');
 });
 
@@ -146,33 +153,119 @@ $('#token-copy').addEventListener('click', () => {
 // --- Render functions ---
 
 function renderCleanResults(data: any) {
-  const { removable, flattenable, safe } = data;
-  currentFeatureData = { all: [...removable, ...flattenable] };
+  var removable = data.removable;
+  var flattenable = data.flattenable;
+  var safe = data.safe;
+  var tree = data.tree || [];
+  currentFeatureData = { all: removable.concat(flattenable) };
 
   $('#clean-summary').style.display = 'flex';
   $('#clean-removable-count').textContent = removable.length;
   $('#clean-flattenable-count').textContent = flattenable.length;
   $('#clean-safe-count').textContent = safe.length;
 
-  const container = $('#clean-results');
+  // Show view toggle
+  $('#clean-view-toggle').style.display = 'flex';
+
+  var container = $('#clean-results');
   if (removable.length === 0 && flattenable.length === 0) {
     container.innerHTML = '<div class="results-empty">No layers to clean</div>';
     ($('#clean-apply') as HTMLButtonElement).disabled = true;
+    renderCleanTree(tree);
     return;
   }
 
-  let html = '';
-  [...removable, ...flattenable].forEach((item: any, i: number) => {
-    const action = item.canRemove ? 'Remove' : 'Flatten';
-    html += `<div class="result-item">
-      <input type="checkbox" checked data-index="${i}">
-      <span class="result-name">${item.name}</span>
-      <span class="result-arrow">&rarr;</span>
-      <span class="result-suggested">${action}</span>
-    </div>`;
-  });
+  var html = '';
+  var allItems = removable.concat(flattenable);
+  for (var i = 0; i < allItems.length; i++) {
+    var item = allItems[i];
+    var action = item.canRemove ? 'Remove' : 'Flatten';
+    var actionClass = item.canRemove ? 'tree-remove' : 'tree-flatten';
+    html += '<div class="result-item">' +
+      '<input type="checkbox" checked data-index="' + i + '">' +
+      '<span class="result-name">' + escHtml(item.name) + '</span>' +
+      '<span class="result-arrow">&rarr;</span>' +
+      '<span class="result-suggested ' + actionClass + '">' + action + '</span>' +
+    '</div>';
+  }
   container.innerHTML = html;
   ($('#clean-apply') as HTMLButtonElement).disabled = false;
+
+  // Render tree
+  renderCleanTree(tree);
+}
+
+/**
+ * Build a cleaned version of the tree:
+ * - Removed nodes (canRemove) are excluded
+ * - Flattened nodes (canFlatten) are replaced by their children
+ * Only uses flags the analyzer already validated as safe.
+ */
+function buildCleanedTree(nodes: any[]): any[] {
+  var result: any[] = [];
+  for (var i = 0; i < nodes.length; i++) {
+    var node = nodes[i];
+    if (node.canRemove) {
+      continue;
+    }
+    if (node.canFlatten && node.children && node.children.length > 0) {
+      var promoted = buildCleanedTree(node.children);
+      for (var j = 0; j < promoted.length; j++) {
+        result.push(promoted[j]);
+      }
+      continue;
+    }
+    var cleaned: any = {
+      name: node.displayName || node.name,
+      displayName: node.displayName,
+      role: node.role,
+      canRemove: false,
+      canFlatten: false,
+      children: node.children ? buildCleanedTree(node.children) : [],
+    };
+    result.push(cleaned);
+  }
+  return result;
+}
+
+/**
+ * Shared tree renderer — renders the final/clean version of the tree
+ * into the given container element.
+ */
+function renderTreeInto(containerId: string, tree: any[]) {
+  var treeContainer = $(containerId);
+  var cleanedTree = buildCleanedTree(tree);
+  var lines: string[] = [];
+
+  function renderNode(node: any, depth: number, prefix: string, isLast: boolean) {
+    var indent = '';
+    if (depth > 0) {
+      indent = prefix + (isLast ? '\u2514\u2500 ' : '\u251C\u2500 ');
+    }
+
+    var displayName = node.displayName || node.name;
+    var nameHtml = '<span class="tree-keep">' + escHtml(displayName) + '</span>';
+    var roleHtml = node.role ? ' <span class="tree-role">(' + node.role + ')</span>' : '';
+
+    lines.push('<span class="tree-indent">' + indent + '</span>' + nameHtml + roleHtml);
+
+    if (node.children && node.children.length > 0) {
+      var childPrefix = depth > 0 ? prefix + (isLast ? '   ' : '\u2502  ') : '';
+      for (var i = 0; i < node.children.length; i++) {
+        renderNode(node.children[i], depth + 1, childPrefix, i === node.children.length - 1);
+      }
+    }
+  }
+
+  for (var i = 0; i < cleanedTree.length; i++) {
+    renderNode(cleanedTree[i], 0, '', i === cleanedTree.length - 1);
+  }
+
+  treeContainer.innerHTML = lines.map(function(l) { return '<div>' + l + '</div>'; }).join('');
+}
+
+function renderCleanTree(tree: any[]) {
+  renderTreeInto('#clean-tree', tree);
 }
 
 let renameTreeData: any[] = [];
@@ -230,53 +323,23 @@ function escHtml(s: string): string {
 }
 
 function renderRenameTree(tree: any[]) {
-  var treeContainer = $('#rename-tree');
-  var lines: string[] = [];
-
-  function renderNode(node: any, depth: number, prefix: string, isLast: boolean) {
-    var indent = '';
-    if (depth > 0) {
-      indent = prefix + (isLast ? '└─ ' : '├─ ');
+  // Apply suggestedName as displayName before rendering
+  function applyRenames(nodes: any[]): any[] {
+    var out: any[] = [];
+    for (var i = 0; i < nodes.length; i++) {
+      var n = nodes[i];
+      out.push({
+        name: n.name,
+        displayName: n.suggestedName || n.name,
+        role: n.suggestedName || n.role,
+        canRemove: n.canRemove,
+        canFlatten: n.canFlatten,
+        children: n.children ? applyRenames(n.children) : [],
+      });
     }
-
-    var nameHtml = '';
-    if (node.canRemove) {
-      nameHtml = '<span class="tree-remove">' + escHtml(node.name) + ' [remove]</span>';
-    } else if (node.canFlatten) {
-      nameHtml = '<span class="tree-flatten">' + escHtml(node.name) + ' [flatten]</span>';
-    } else if (node.suggestedName) {
-      nameHtml = '<span class="tree-old">' + escHtml(node.name) + '</span>' +
-        ' <span class="tree-indent">&rarr;</span> ' +
-        '<span class="tree-new">' + escHtml(node.suggestedName) + '</span>';
-    } else {
-      nameHtml = '<span class="tree-keep">' + escHtml(node.name) + '</span>';
-    }
-
-    // Show role, but if renamed show the new role context instead
-    var displayRole = node.role;
-    if (node.suggestedName) {
-      // Extract implied role from suggested name (e.g., button_label → label)
-      if (node.suggestedName.indexOf('button_') === 0) displayRole = node.suggestedName;
-      else if (node.suggestedName.indexOf('-') >= 0) displayRole = node.suggestedName;
-      else displayRole = node.suggestedName;
-    }
-    var roleHtml = displayRole ? ' <span class="tree-role">(' + displayRole + ')</span>' : '';
-
-    lines.push('<span class="tree-indent">' + indent + '</span>' + nameHtml + roleHtml);
-
-    if (node.children && node.children.length > 0) {
-      var childPrefix = depth > 0 ? prefix + (isLast ? '   ' : '│  ') : '';
-      for (var i = 0; i < node.children.length; i++) {
-        renderNode(node.children[i], depth + 1, childPrefix, i === node.children.length - 1);
-      }
-    }
+    return out;
   }
-
-  for (var i = 0; i < tree.length; i++) {
-    renderNode(tree[i], 0, '', i === tree.length - 1);
-  }
-
-  treeContainer.innerHTML = lines.map(function(l) { return '<div>' + l + '</div>'; }).join('');
+  renderTreeInto('#rename-tree', applyRenames(tree));
 }
 
 function renderValidationReport(data: any) {

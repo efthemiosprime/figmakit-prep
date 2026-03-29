@@ -171,9 +171,9 @@
     background: #1e1e2e;
     color: #cdd6f4;
     border-radius: 6px;
-    overflow: auto;
-    max-height: 350px;
-    flex: 1;
+    overflow: auto !important;
+    flex: 1 1 0;
+    min-height: 0;
   }
   .tree-view div {
     white-space: pre;
@@ -338,9 +338,14 @@
     <div class="summary-stat">Flattenable: <strong id="clean-flattenable-count">0</strong></div>
     <div class="summary-stat">Safe: <strong id="clean-safe-count">0</strong></div>
   </div>
+  <div class="view-toggle" id="clean-view-toggle" style="display:none">
+    <button class="active" data-view="list">List</button>
+    <button data-view="tree">Tree Preview</button>
+  </div>
   <div class="results" id="clean-results">
     <div class="results-empty">Select frames and click Scan to find removable layers</div>
   </div>
+  <div class="tree-view" id="clean-tree" style="display:none"></div>
   <div class="btn-row">
     <button class="btn btn-secondary" id="clean-scan">Scan</button>
     <button class="btn btn-primary" id="clean-apply" disabled>Clean</button>

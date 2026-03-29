@@ -19,19 +19,19 @@ function getTargetNodes(): readonly any[] {
 /**
  * Handle a message from the UI.
  */
-export function handleMessage(msg: any): void {
+export async function handleMessage(msg: any): Promise<void> {
   try {
-    const { type } = msg;
+    var type = msg.type;
 
     if (type === 'scan') {
       handleScan(msg);
     } else if (type === 'apply') {
-      handleApply(msg);
+      await handleApply(msg);
     } else {
-      figma.ui.postMessage({ type: 'error', message: `Unknown message type: ${type}` });
+      figma.ui.postMessage({ type: 'error', message: 'Unknown message type: ' + type });
     }
   } catch (err: any) {
-    figma.ui.postMessage({ type: 'error', message: err.message ?? 'Unknown error' });
+    figma.ui.postMessage({ type: 'error', message: err.message || 'Unknown error' });
   }
 }
 
@@ -43,6 +43,17 @@ function handleScan(msg: any): void {
   switch (feature) {
     case 'cleaner': {
       const scan = scanForCleaning(results);
+      var cleanTree = results.map(function serializeCleanTree(r: any): any {
+        return {
+          id: r.id,
+          name: r.name,
+          role: r.role,
+          canRemove: r.canRemove,
+          canFlatten: r.canFlatten,
+          removeReason: r.removeReason,
+          children: r.children.map(serializeCleanTree),
+        };
+      });
       figma.ui.postMessage({
         type: 'scan-result',
         feature: 'cleaner',
@@ -50,6 +61,7 @@ function handleScan(msg: any): void {
           removable: serializeResults(scan.removable),
           flattenable: serializeResults(scan.flattenable),
           safe: serializeResults(scan.safe),
+          tree: cleanTree,
         },
       });
       break;
@@ -159,19 +171,50 @@ function handleScan(msg: any): void {
   }
 }
 
-function handleApply(msg: any): void {
-  const { feature } = msg;
+async function handleApply(msg: any): Promise<void> {
+  var feature = msg.feature;
 
   switch (feature) {
     case 'cleaner': {
-      const result = applyClean(msg.actions as CleanActionItem[]);
-      figma.ui.postMessage({ type: 'apply-result', feature: 'cleaner', data: result });
+      var removed = 0;
+      var flattened = 0;
+      var actions = msg.actions || [];
+      for (var ci = 0; ci < actions.length; ci++) {
+        var action = actions[ci];
+        var node = await figma.getNodeByIdAsync(action.nodeId);
+        if (!node) continue;
+        if (action.action === 'remove') {
+          node.remove();
+          removed++;
+        } else if (action.action === 'flatten') {
+          var parent = node.parent;
+          if (parent && 'children' in node && (node as any).children.length === 1) {
+            var child = (node as any).children[0];
+            var idx = parent.children.indexOf(node);
+            child.x = (child.x || 0) + ((node as any).x || 0);
+            child.y = (child.y || 0) + ((node as any).y || 0);
+            parent.insertChild(idx, child);
+            node.remove();
+            flattened++;
+          }
+        }
+      }
+      figma.ui.postMessage({ type: 'apply-result', feature: 'cleaner', data: { removed: removed, flattened: flattened } });
       break;
     }
 
     case 'renamer': {
-      const count = applyRenames(msg.actions as RenameAction[]);
-      figma.ui.postMessage({ type: 'apply-result', feature: 'renamer', data: count });
+      var renameCount = 0;
+      var renameActions = msg.actions || [];
+      for (var ri = 0; ri < renameActions.length; ri++) {
+        var rAction = renameActions[ri];
+        var rNode = await figma.getNodeByIdAsync(rAction.nodeId);
+        if (rNode) {
+          rNode.name = rAction.suggestedName;
+          renameCount++;
+        }
+      }
+      figma.ui.postMessage({ type: 'apply-result', feature: 'renamer', data: renameCount });
       break;
     }
 

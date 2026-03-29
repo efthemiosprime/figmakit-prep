@@ -9,6 +9,8 @@ let messageHandler: ((msg: any) => void) | null = null;
 const mockSelection: any[] = [];
 const mockPageChildren: any[] = [];
 
+const mockNodeStore: Record<string, any> = {};
+
 (globalThis as any).figma = {
   showUI: mockShowUI,
   ui: {
@@ -20,6 +22,7 @@ const mockPageChildren: any[] = [];
     get selection() { return mockSelection; },
     get children() { return mockPageChildren; },
   },
+  getNodeByIdAsync: vi.fn(async (id: string) => mockNodeStore[id] || null),
 };
 
 // We need __html__ for the showUI call
@@ -44,6 +47,8 @@ describe('plugin entry', () => {
     mockOn.mockClear();
     mockSelection.length = 0;
     mockPageChildren.length = 0;
+    // Clear node store
+    for (var key in mockNodeStore) { delete mockNodeStore[key]; }
   });
 
   describe('initialization', () => {
@@ -152,17 +157,19 @@ describe('plugin entry', () => {
     });
 
     describe('apply messages', () => {
-      it('handles apply for cleaner', () => {
+      it('handles apply for cleaner', async () => {
         const node = mockFrameNode({ visible: false, children: [mockTextNode()] });
         node.remove = vi.fn();
+        mockNodeStore[node.id] = node;
         mockSelection.push(node);
 
-        handleMessage({
+        await handleMessage({
           type: 'apply',
           feature: 'cleaner',
-          actions: [{ nodeId: node.id, node, action: 'remove', reason: 'hidden' }],
+          actions: [{ nodeId: node.id, action: 'remove' }],
         });
 
+        expect(node.remove).toHaveBeenCalled();
         expect(mockPostMessage).toHaveBeenCalledTimes(1);
         const response = mockPostMessage.mock.calls[0][0];
         expect(response.type).toBe('apply-result');
@@ -170,15 +177,16 @@ describe('plugin entry', () => {
         expect(response.data.removed).toBe(1);
       });
 
-      it('handles apply for renamer', () => {
+      it('handles apply for renamer', async () => {
         const node = mockTextNode({ name: 'Frame 1', fontSize: 16, fontWeight: 400 });
+        mockNodeStore[node.id] = node;
         mockSelection.push(node);
 
-        handleMessage({
+        await handleMessage({
           type: 'apply',
           feature: 'renamer',
           actions: [
-            { nodeId: node.id, node, currentName: 'Frame 1', suggestedName: 'text', confidence: 90, source: 'type' },
+            { nodeId: node.id, suggestedName: 'text' },
           ],
         });
 

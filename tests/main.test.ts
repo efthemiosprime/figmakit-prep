@@ -86,7 +86,9 @@ describe('plugin entry', () => {
         const response = mockPostMessage.mock.calls[0][0];
         expect(response.type).toBe('scan-result');
         expect(response.feature).toBe('renamer');
-        expect(Array.isArray(response.data)).toBe(true);
+        expect(response.data.actions).toBeDefined();
+        expect(Array.isArray(response.data.actions)).toBe(true);
+        expect(response.data.tree).toBeDefined();
       });
 
       it('handles scan for validator and posts report', () => {
@@ -239,7 +241,7 @@ describe('plugin entry', () => {
 
         expect(mockPostMessage).toHaveBeenCalledTimes(1);
         const response = mockPostMessage.mock.calls[0][0];
-        expect(response.data.length).toBeGreaterThanOrEqual(1);
+        expect(response.data.actions.length).toBeGreaterThanOrEqual(1);
       });
 
       it('uses selection when available', () => {
@@ -252,7 +254,7 @@ describe('plugin entry', () => {
 
         const response = mockPostMessage.mock.calls[0][0];
         // Should only analyze the selected node, not page children
-        const hasIcon = response.data.some((a: any) => a.suggestedName === 'icon');
+        const hasIcon = response.data.actions.some((a: any) => a.suggestedName === 'icon');
         expect(hasIcon).toBe(true);
       });
     });

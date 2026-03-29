@@ -59,6 +59,10 @@ export const NAME_PATTERNS: NamePattern[] = [
   // Container-like patterns
   { pattern: /^(container|wrapper|frame|box|panel|block|layout|section)([-_\s/].*)?$/i, role: 'container' },
 
+  // List / list items
+  { pattern: /^(list|nav[-_\s]?list|menu)([-_\s/].*)?$/i, role: 'list' },
+  { pattern: /^(item|list[-_\s]?item|menu[-_\s]?item|nav[-_\s]?item)([-_\s/].*)?$/i, role: 'list-item' },
+
   // Divider
   { pattern: /^(divider|separator|hr|line)([-_\s/].*)?$/i, role: 'divider' },
 

@@ -12,7 +12,7 @@ const mainBuildOptions = {
   bundle: true,
   outfile: resolve(__dirname, 'dist/main.js'),
   format: 'iife',
-  target: 'es2020',
+  target: 'es2015',
   minify: !isWatch,
 };
 
@@ -22,7 +22,7 @@ const uiBuildOptions = {
   bundle: true,
   write: false,
   format: 'iife',
-  target: 'es2020',
+  target: 'es2015',
   minify: !isWatch,
 };
 

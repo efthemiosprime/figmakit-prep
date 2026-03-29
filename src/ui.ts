@@ -44,6 +44,23 @@ function confBadge(confidence: number): string {
   return `<span class="result-confidence ${cls}">${confidence}%</span>`;
 }
 
+// --- Rename view toggle ---
+document.addEventListener('click', function(e) {
+  var target = e.target as HTMLElement;
+  if (target.parentElement && target.parentElement.id === 'rename-view-toggle') {
+    var view = target.dataset.view;
+    $$('#rename-view-toggle button').forEach(function(b) { b.classList.remove('active'); });
+    target.classList.add('active');
+    if (view === 'tree') {
+      $('#rename-results').style.display = 'none';
+      $('#rename-tree').style.display = 'block';
+    } else {
+      $('#rename-results').style.display = 'block';
+      $('#rename-tree').style.display = 'none';
+    }
+  }
+});
+
 // --- Clean Panel ---
 $('#clean-scan').addEventListener('click', () => {
   setStatus('Scanning...');
@@ -158,31 +175,108 @@ function renderCleanResults(data: any) {
   ($('#clean-apply') as HTMLButtonElement).disabled = false;
 }
 
-function renderRenameResults(data: any[]) {
-  currentFeatureData = data;
+let renameTreeData: any[] = [];
+
+function renderRenameResults(data: any) {
+  var actions = data.actions;
+  var tree = data.tree;
+  currentFeatureData = actions;
+  renameTreeData = tree || [];
 
   $('#rename-summary').style.display = 'flex';
-  $('#rename-count').textContent = String(data.length);
+  $('#rename-count').textContent = String(actions.length);
 
-  const container = $('#rename-results');
-  if (data.length === 0) {
-    container.innerHTML = '<div class="results-empty">No layers to rename</div>';
+  // Count total layers in tree
+  var totalLayers = 0;
+  function countNodes(nodes: any[]) {
+    for (var i = 0; i < nodes.length; i++) {
+      totalLayers++;
+      if (nodes[i].children) countNodes(nodes[i].children);
+    }
+  }
+  countNodes(renameTreeData);
+  $('#rename-total').textContent = String(totalLayers);
+
+  // Show view toggle
+  $('#rename-view-toggle').style.display = 'flex';
+
+  var container = $('#rename-results');
+  if (actions.length === 0) {
+    container.innerHTML = '<div class="results-empty">No layers to rename — all layers already have semantic names</div>';
     ($('#rename-apply') as HTMLButtonElement).disabled = true;
+    renderRenameTree(renameTreeData);
     return;
   }
 
-  let html = '';
-  data.forEach((item: any, i: number) => {
-    html += `<div class="result-item">
-      <input type="checkbox" checked data-index="${i}">
-      <span class="result-name">${item.currentName}</span>
-      <span class="result-arrow">&rarr;</span>
-      <span class="result-suggested">${item.suggestedName}</span>
-      ${confBadge(item.confidence)}
-    </div>`;
+  var html = '';
+  actions.forEach(function(item: any, i: number) {
+    html += '<div class="result-item">' +
+      '<input type="checkbox" checked data-index="' + i + '">' +
+      '<span class="result-name">' + escHtml(item.currentName) + '</span>' +
+      '<span class="result-arrow">&rarr;</span>' +
+      '<span class="result-suggested">' + escHtml(item.suggestedName) + '</span>' +
+      confBadge(item.confidence) +
+    '</div>';
   });
   container.innerHTML = html;
   ($('#rename-apply') as HTMLButtonElement).disabled = false;
+
+  // Render tree preview
+  renderRenameTree(renameTreeData);
+}
+
+function escHtml(s: string): string {
+  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+function renderRenameTree(tree: any[]) {
+  var treeContainer = $('#rename-tree');
+  var lines: string[] = [];
+
+  function renderNode(node: any, depth: number, prefix: string, isLast: boolean) {
+    var indent = '';
+    if (depth > 0) {
+      indent = prefix + (isLast ? '└─ ' : '├─ ');
+    }
+
+    var nameHtml = '';
+    if (node.canRemove) {
+      nameHtml = '<span class="tree-remove">' + escHtml(node.name) + ' [remove]</span>';
+    } else if (node.canFlatten) {
+      nameHtml = '<span class="tree-flatten">' + escHtml(node.name) + ' [flatten]</span>';
+    } else if (node.suggestedName) {
+      nameHtml = '<span class="tree-old">' + escHtml(node.name) + '</span>' +
+        ' <span class="tree-indent">&rarr;</span> ' +
+        '<span class="tree-new">' + escHtml(node.suggestedName) + '</span>';
+    } else {
+      nameHtml = '<span class="tree-keep">' + escHtml(node.name) + '</span>';
+    }
+
+    // Show role, but if renamed show the new role context instead
+    var displayRole = node.role;
+    if (node.suggestedName) {
+      // Extract implied role from suggested name (e.g., button_label → label)
+      if (node.suggestedName.indexOf('button_') === 0) displayRole = node.suggestedName;
+      else if (node.suggestedName.indexOf('-') >= 0) displayRole = node.suggestedName;
+      else displayRole = node.suggestedName;
+    }
+    var roleHtml = displayRole ? ' <span class="tree-role">(' + displayRole + ')</span>' : '';
+
+    lines.push('<span class="tree-indent">' + indent + '</span>' + nameHtml + roleHtml);
+
+    if (node.children && node.children.length > 0) {
+      var childPrefix = depth > 0 ? prefix + (isLast ? '   ' : '│  ') : '';
+      for (var i = 0; i < node.children.length; i++) {
+        renderNode(node.children[i], depth + 1, childPrefix, i === node.children.length - 1);
+      }
+    }
+  }
+
+  for (var i = 0; i < tree.length; i++) {
+    renderNode(tree[i], 0, '', i === tree.length - 1);
+  }
+
+  treeContainer.innerHTML = lines.map(function(l) { return '<div>' + l + '</div>'; }).join('');
 }
 
 function renderValidationReport(data: any) {

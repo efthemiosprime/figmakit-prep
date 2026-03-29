@@ -63,6 +63,7 @@ export const SEMANTIC_NAMES = [
   'card', 'hero', 'feature', 'gallery', 'testimonial', 'quote',
   'accordion', 'tabs', 'modal', 'dialog', 'isi', 'header', 'navbar',
   'card__image', 'card__title', 'card__body', 'card__cta',
+  'list', 'item', 'list-item', 'nav-list', 'menu',
 ];
 
 // Typography class definitions (mirrors fk_snap_to_theme_text_class() in helpers.php)

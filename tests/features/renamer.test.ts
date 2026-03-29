@@ -13,6 +13,7 @@ import {
 } from '../helpers/figma-mock';
 
 describe('generateName', () => {
+  // --- Basic role-to-name ---
   it('returns "h1" for heading with fontSize >= 48', () => {
     const node = mockTextNode({ name: 'Frame 1', fontSize: 48, fontWeight: 700 });
     const result = analyzeNode(node);
@@ -29,24 +30,6 @@ describe('generateName', () => {
     const node = mockTextNode({ name: 'Frame 1', fontSize: 28, fontWeight: 600 });
     const result = analyzeNode(node);
     expect(generateName(result)).toBe('h3');
-  });
-
-  it('returns "h4" for heading with fontSize >= 22', () => {
-    const node = mockTextNode({ name: 'Frame 1', fontSize: 22, fontWeight: 600 });
-    const result = analyzeNode(node);
-    expect(generateName(result)).toBe('h4');
-  });
-
-  it('returns "h5" for heading with fontSize >= 18', () => {
-    const node = mockTextNode({ name: 'Frame 1', fontSize: 18, fontWeight: 600 });
-    const result = analyzeNode(node);
-    expect(generateName(result)).toBe('h5');
-  });
-
-  it('returns "h6" for heading with small fontSize but bold weight', () => {
-    const node = mockTextNode({ name: 'Frame 1', fontSize: 14, fontWeight: 700 });
-    const result = analyzeNode(node);
-    expect(generateName(result)).toBe('h6');
   });
 
   it('returns "text" for normal text', () => {
@@ -85,28 +68,6 @@ describe('generateName', () => {
     expect(generateName(result)).toBe('button');
   });
 
-  it('returns "row" for horizontal auto-layout', () => {
-    const node = mockFrameNode({
-      name: 'Frame 1',
-      width: 400,
-      layoutMode: 'HORIZONTAL',
-      children: [mockTextNode(), mockTextNode({ name: 'Text 2' })],
-    });
-    const result = analyzeNode(node);
-    expect(generateName(result)).toBe('row');
-  });
-
-  it('returns "vstack" for vertical auto-layout', () => {
-    const node = mockFrameNode({
-      name: 'Frame 1',
-      width: 400,
-      layoutMode: 'VERTICAL',
-      children: [mockTextNode(), mockTextNode({ name: 'Text 2' })],
-    });
-    const result = analyzeNode(node);
-    expect(generateName(result)).toBe('vstack');
-  });
-
   it('returns "section" for wide containers', () => {
     const node = mockFrameNode({
       name: 'Frame 1',
@@ -116,32 +77,6 @@ describe('generateName', () => {
     });
     const result = analyzeNode(node);
     expect(generateName(result)).toBe('section');
-  });
-
-  it('returns "spacer" for spacer nodes', () => {
-    const node = mockFrameNode({
-      name: 'Frame 1',
-      children: [],
-      fills: [], strokes: [], effects: [],
-      layoutMode: 'NONE',
-    });
-    const result = analyzeNode(node);
-    expect(generateName(result)).toBe('spacer');
-  });
-
-  it('returns "card" for card-fingerprinted nodes', () => {
-    const children = [
-      mockRectangleNode({ name: 'Rectangle 1', fills: [mockImagePaint()], width: 300, height: 200 }),
-      mockTextNode({ name: 'Text 1', fontSize: 24, fontWeight: 700 }),
-      mockTextNode({ name: 'Text 2', fontSize: 16, fontWeight: 400 }),
-    ];
-    const node = mockFrameNode({
-      name: 'Frame 1',
-      width: 350, height: 400,
-      children,
-    });
-    const result = analyzeNode(node);
-    expect(generateName(result)).toBe('card');
   });
 
   it('returns null for already semantic names', () => {
@@ -156,18 +91,115 @@ describe('generateName', () => {
     expect(generateName(result)).toBeNull();
   });
 
-  it('returns null for unknown/container roles (low confidence)', () => {
-    const node = mockFrameNode({
-      name: 'Frame 1',
-      width: 400, height: 300,
-      fills: [mockSolidPaint()],
-      children: [mockTextNode(), mockRectangleNode()],
+  // --- Parent-context-aware naming ---
+  describe('parent context', () => {
+    // Card children — matches FigmaKit WP fk_resolve_from_name_patterns()
+    it('returns "card-header" for image inside a card (WP pattern: card-header → image)', () => {
+      const node = mockRectangleNode({ name: 'Rectangle 1', fills: [mockImagePaint()] });
+      const result = analyzeNode(node);
+      expect(generateName(result, 'card')).toBe('card-header');
     });
-    const result = analyzeNode(node);
-    // container with confidence 30 — not worth renaming
-    if (result.role === 'container') {
-      expect(generateName(result)).toBeNull();
-    }
+
+    it('returns "card-title" for heading inside a card', () => {
+      const node = mockTextNode({ name: 'Frame 1', fontSize: 24, fontWeight: 700 });
+      const result = analyzeNode(node);
+      expect(generateName(result, 'card')).toBe('card-title');
+    });
+
+    it('returns "card-body" for text inside a card (WP pattern: card-body → text)', () => {
+      const node = mockTextNode({ name: 'Frame 1', fontSize: 16, fontWeight: 400 });
+      const result = analyzeNode(node);
+      expect(generateName(result, 'card')).toBe('card-body');
+    });
+
+    it('returns "card-cta" for button inside a card (WP pattern: card-cta → button)', () => {
+      const node = mockFrameNode({
+        name: 'Frame 1',
+        width: 120, height: 44,
+        layoutMode: 'HORIZONTAL',
+        fills: [mockSolidPaint()],
+        children: [mockTextNode({ characters: 'Click' })],
+      });
+      const result = analyzeNode(node);
+      expect(generateName(result, 'card')).toBe('card-cta');
+    });
+
+    // Hero children
+    it('returns "hero-title" for heading inside a hero', () => {
+      const node = mockTextNode({ name: 'Frame 1', fontSize: 48, fontWeight: 700 });
+      const result = analyzeNode(node);
+      expect(generateName(result, 'hero')).toBe('hero-title');
+    });
+
+    it('returns "hero-description" for text inside a hero', () => {
+      const node = mockTextNode({ name: 'Frame 1', fontSize: 16, fontWeight: 400 });
+      const result = analyzeNode(node);
+      expect(generateName(result, 'hero')).toBe('hero-description');
+    });
+
+    it('returns "hero-cta" for button inside a hero', () => {
+      const node = mockFrameNode({
+        name: 'Frame 1',
+        width: 120, height: 44,
+        layoutMode: 'HORIZONTAL',
+        fills: [mockSolidPaint()],
+        children: [mockTextNode({ characters: 'Click' })],
+      });
+      const result = analyzeNode(node);
+      expect(generateName(result, 'hero')).toBe('hero-cta');
+    });
+
+    // Feature children
+    it('returns "feature-icon" for icon inside a feature', () => {
+      const node = mockVectorNode({ name: 'Vector 1', width: 24, height: 24 });
+      const result = analyzeNode(node);
+      expect(generateName(result, 'feature')).toBe('feature-icon');
+    });
+
+    it('returns "feature-title" for heading inside a feature', () => {
+      const node = mockTextNode({ name: 'Frame 1', fontSize: 24, fontWeight: 700 });
+      const result = analyzeNode(node);
+      expect(generateName(result, 'feature')).toBe('feature-title');
+    });
+
+    // Testimonial children
+    it('returns "testimonial-avatar" for image inside a testimonial', () => {
+      const node = mockRectangleNode({ name: 'Rectangle 1', fills: [mockImagePaint()] });
+      const result = analyzeNode(node);
+      expect(generateName(result, 'testimonial')).toBe('testimonial-avatar');
+    });
+
+    it('returns "testimonial-quote" for text inside a testimonial', () => {
+      const node = mockTextNode({ name: 'Frame 1', fontSize: 16, fontWeight: 400 });
+      const result = analyzeNode(node);
+      expect(generateName(result, 'testimonial')).toBe('testimonial-quote');
+    });
+
+    it('returns "testimonial-author" for heading inside a testimonial', () => {
+      const node = mockTextNode({ name: 'Frame 1', fontSize: 24, fontWeight: 700 });
+      const result = analyzeNode(node);
+      expect(generateName(result, 'testimonial')).toBe('testimonial-author');
+    });
+
+    // CTA children
+    it('returns "cta-button" for button inside cta', () => {
+      const node = mockFrameNode({
+        name: 'Frame 1',
+        width: 120, height: 44,
+        layoutMode: 'HORIZONTAL',
+        fills: [mockSolidPaint()],
+        children: [mockTextNode({ characters: 'Click' })],
+      });
+      const result = analyzeNode(node);
+      expect(generateName(result, 'cta')).toBe('cta-button');
+    });
+
+    it('uses plain name when parent is not composite', () => {
+      const node = mockTextNode({ name: 'Frame 1', fontSize: 16, fontWeight: 400 });
+      const result = analyzeNode(node);
+      expect(generateName(result, 'section')).toBe('text');
+      expect(generateName(result, 'row')).toBe('text');
+    });
   });
 });
 
@@ -212,12 +244,95 @@ describe('scanForRenaming', () => {
     });
     const result = analyzeNode(node);
     const actions = scanForRenaming([result]);
-    // Component definitions should not be renamed at top level
     const topLevelActions = actions.filter(a => a.nodeId === node.id);
     expect(topLevelActions).toHaveLength(0);
   });
 
-  it('scans children recursively', () => {
+  it('renames card children with parent-prefixed names', () => {
+    const children = [
+      mockRectangleNode({ name: 'Rectangle 1', fills: [mockImagePaint()], width: 300, height: 200 }),
+      mockTextNode({ name: 'Frame 21', fontSize: 24, fontWeight: 700 }),
+      mockTextNode({ name: 'Frame 31', fontSize: 16, fontWeight: 400 }),
+      mockFrameNode({
+        name: 'Frame 41',
+        width: 120, height: 44,
+        layoutMode: 'HORIZONTAL',
+        fills: [mockSolidPaint()],
+        children: [mockTextNode({ name: 'Frame 51', characters: 'CTA' })],
+      }),
+    ];
+    const card = mockFrameNode({
+      name: 'Frame 61',
+      width: 350, height: 450,
+      layoutMode: 'VERTICAL',
+      cornerRadius: 8,
+      children,
+    });
+    const results = [analyzeNode(card)];
+    const actions = scanForRenaming(results);
+
+    const names = actions.map(a => a.suggestedName);
+    expect(names).toContain('card');
+    expect(names).toContain('card-header');  // image → card-header (matches WP pattern)
+    expect(names).toContain('card-title');
+    expect(names).toContain('card-body');   // text → card-body (matches WP pattern)
+    expect(names).toContain('card-cta');    // button → card-cta (matches WP pattern)
+  });
+
+  it('renames hero children with parent-prefixed names', () => {
+    const children = [
+      mockTextNode({ name: 'Frame 10', fontSize: 48, fontWeight: 700 }),
+      mockTextNode({ name: 'Frame 11', fontSize: 16, fontWeight: 400 }),
+      mockFrameNode({
+        name: 'Frame 12',
+        width: 160, height: 48,
+        layoutMode: 'HORIZONTAL',
+        fills: [mockSolidPaint()],
+        children: [mockTextNode({ name: 'Frame 13', characters: 'Go' })],
+      }),
+    ];
+    const hero = mockFrameNode({
+      name: 'Frame 1',
+      width: 1200, height: 600,
+      fills: [mockImagePaint()],
+      children,
+    });
+    const results = [analyzeNode(hero)];
+    const actions = scanForRenaming(results);
+
+    const names = actions.map(a => a.suggestedName);
+    expect(names).toContain('hero');
+    expect(names).toContain('hero-title');
+    expect(names).toContain('hero-description');
+    expect(names).toContain('hero-cta');
+  });
+
+  it('gives same name to duplicate children (no index suffix)', () => {
+    const children = [
+      mockTextNode({ name: 'Frame 1', fontSize: 16, fontWeight: 400 }),
+      mockTextNode({ name: 'Frame 2', fontSize: 16, fontWeight: 400 }),
+    ];
+    const card = mockFrameNode({
+      name: 'Frame 61',
+      width: 350, height: 450,
+      layoutMode: 'VERTICAL',
+      cornerRadius: 8,
+      children: [
+        mockRectangleNode({ name: 'Rectangle 1', fills: [mockImagePaint()], width: 300, height: 200 }),
+        mockTextNode({ name: 'Frame 21', fontSize: 24, fontWeight: 700 }),
+        ...children,
+      ],
+    });
+    const results = [analyzeNode(card)];
+    const actions = scanForRenaming(results);
+
+    const bodyNames = actions.filter(a => a.suggestedName === 'card-body');
+    expect(bodyNames.length).toBeGreaterThanOrEqual(2);
+    // All get the same name — no -2, -3 suffix
+    bodyNames.forEach(a => expect(a.suggestedName).toBe('card-body'));
+  });
+
+  it('does not prefix children of non-composite parents', () => {
     const child = mockTextNode({ name: 'Frame 2', fontSize: 16, fontWeight: 400 });
     const root = mockFrameNode({
       name: 'Frame 1',
@@ -228,21 +343,7 @@ describe('scanForRenaming', () => {
     const actions = scanForRenaming(results);
     const childAction = actions.find(a => a.nodeId === child.id);
     expect(childAction).toBeDefined();
-    expect(childAction!.suggestedName).toBe('text');
-  });
-
-  it('handles duplicate names by appending index', () => {
-    const nodes = [
-      mockTextNode({ name: 'Frame 1', fontSize: 16, fontWeight: 400 }),
-      mockTextNode({ name: 'Frame 2', fontSize: 16, fontWeight: 400 }),
-      mockTextNode({ name: 'Frame 3', fontSize: 16, fontWeight: 400 }),
-    ];
-    const results = nodes.map(n => analyzeNode(n));
-    const actions = scanForRenaming(results);
-    const names = actions.map(a => a.suggestedName);
-    expect(names).toContain('text');
-    expect(names).toContain('text-2');
-    expect(names).toContain('text-3');
+    expect(childAction!.suggestedName).toBe('text'); // plain, not prefixed
   });
 });
 

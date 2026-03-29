@@ -3,7 +3,7 @@ import { AUTO_NAME_PATTERN, SEMANTIC_NAMES } from '../shared/constants';
 import { matchNamePattern } from '../shared/patterns';
 import { classifyNode } from './classifier';
 import { fingerprintChildren, matchFingerprint } from './fingerprinter';
-import { canRemove, canFlatten } from './safety-check';
+import { canRemove, canFlatten, isRedundantNesting } from './safety-check';
 
 // --- Helpers ---
 
@@ -188,6 +188,9 @@ export function analyzeNode(node: any, depth: number = 0): AnalysisResult {
   // 5. Safety assessment
   const removeAssessment = canRemove(node);
   const flattenAssessment = canFlatten(node);
+  const redundantAssessment = isRedundantNesting(node);
+  // canFlatten OR redundant nesting — either makes it flattenable
+  const isFlattenable = flattenAssessment.safe || redundantAssessment.safe;
 
   // 6. Suggested name (only for auto-generated names)
   let suggestedName: string | null = null;
@@ -219,7 +222,7 @@ export function analyzeNode(node: any, depth: number = 0): AnalysisResult {
     fkLabel: null,
 
     canRemove: removeAssessment.safe,
-    canFlatten: flattenAssessment.safe,
+    canFlatten: isFlattenable,
     removeReason: removeAssessment.safe ? removeAssessment.reason : null,
     preserveReason: removeAssessment.safe ? null : removeAssessment.reason,
 

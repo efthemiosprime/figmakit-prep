@@ -255,16 +255,35 @@ describe('matchFingerprint', () => {
 
   // --- REPEATER (row of same-type containers) ---
   describe('repeater detection', () => {
-    it('detects repeater: 3+ same-type containers → row', () => {
+    it('detects repeater: 3+ same-type containers with mixed content → row', () => {
       const node = mockFrameNode({ width: 900, height: 400 });
+      const fp = {
+        images: 1, texts: 0, headings: 0, buttons: 1, icons: 0, containers: 4,
+        total: 6, hasImageFill: false, allSameType: false,
+        parentWidth: 900, parentHeight: 400,
+      };
+      // Has images+buttons so not a pure list, containers are 4 and allSameType would be false
+      // Let's test with all same containers and some mixed
+      const fp2 = {
+        images: 0, texts: 0, headings: 0, buttons: 1, icons: 0, containers: 4,
+        total: 5, hasImageFill: false, allSameType: true,
+        parentWidth: 900, parentHeight: 400,
+      };
+      const result = matchFingerprint(node, fp2);
+      expect(result).not.toBeNull();
+      expect(result!.role).toBe('row');
+    });
+
+    it('detects list: 3+ same-type containers with no images/buttons → list', () => {
+      const node = mockFrameNode({ width: 400, height: 300 });
       const fp = {
         images: 0, texts: 0, headings: 0, buttons: 0, icons: 0, containers: 4,
         total: 4, hasImageFill: false, allSameType: true,
-        parentWidth: 900, parentHeight: 400,
+        parentWidth: 400, parentHeight: 300,
       };
       const result = matchFingerprint(node, fp);
       expect(result).not.toBeNull();
-      expect(result!.role).toBe('row');
+      expect(result!.role).toBe('list');
     });
   });
 

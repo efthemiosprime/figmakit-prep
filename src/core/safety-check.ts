@@ -142,6 +142,50 @@ export function canFlatten(node: any): SafetyAssessment {
 }
 
 /**
+ * Check if a single-child container is a redundant nesting wrapper.
+ * More aggressive than canFlatten — allows auto-layout and padding IF:
+ * - Single child that is also a container type
+ * - No fill, no stroke, no effects, no corner radius
+ * This catches patterns like: Footer > Container > Container > [content]
+ */
+export function isRedundantNesting(node: any): SafetyAssessment {
+  var childCount = getChildCount(node);
+  if (childCount !== 1) {
+    return { safe: false, reason: 'not-single-child' };
+  }
+
+  // Must be a container type
+  var type = node.type || '';
+  var containerTypes = ['FRAME', 'GROUP', 'COMPONENT', 'INSTANCE', 'SECTION'];
+  if (containerTypes.indexOf(type) < 0) {
+    return { safe: false, reason: 'not-container' };
+  }
+
+  // Child must also be a container type with children
+  var child = node.children[0];
+  var childType = child.type || '';
+  if (containerTypes.indexOf(childType) < 0) {
+    return { safe: false, reason: 'child-not-container' };
+  }
+
+  // No visual contribution allowed
+  if (hasAnyVisibleFill(node)) {
+    return { safe: false, reason: 'has-fill' };
+  }
+  if (hasAnyVisibleStroke(node)) {
+    return { safe: false, reason: 'has-stroke' };
+  }
+  if (hasAnyVisibleEffect(node)) {
+    return { safe: false, reason: 'has-effects' };
+  }
+  if ((node.cornerRadius || 0) > 0) {
+    return { safe: false, reason: 'has-corner-radius' };
+  }
+
+  return { safe: true, reason: 'redundant-nesting' };
+}
+
+/**
  * Check if a node is a background decoration shape covering >= 90% of its parent.
  * Only RECTANGLE and ELLIPSE are considered background shapes.
  */

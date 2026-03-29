@@ -11,6 +11,7 @@ const LABELABLE_ROLES: Set<NodeRole> = new Set([
   'card', 'hero', 'feature', 'cta', 'testimonial',
   'accordion', 'tabs', 'modal', 'gallery',
   'isi', 'header',
+  'list', 'list-item',
 ]);
 
 /**

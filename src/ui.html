@@ -48,10 +48,11 @@
   .panel {
     display: none;
     padding: 16px;
-    height: calc(100vh - 96px - 36px);
+    min-height: 200px;
+    max-height: calc(100vh - 120px);
     overflow-y: auto;
   }
-  .panel.active { display: block; }
+  .panel.active { display: flex; flex-direction: column; }
 
   /* --- Buttons --- */
   .btn {
@@ -85,6 +86,7 @@
     display: flex;
     gap: 8px;
     margin-top: 12px;
+    flex-shrink: 0;
   }
 
   /* --- Results List --- */
@@ -92,8 +94,9 @@
     margin-top: 12px;
     border: 1px solid #e5e5e5;
     border-radius: 6px;
-    max-height: 320px;
+    max-height: 280px;
     overflow-y: auto;
+    flex: 1;
   }
   .results-empty {
     padding: 24px;
@@ -157,6 +160,50 @@
   .summary-stat strong {
     color: #111827;
     font-weight: 600;
+  }
+
+  /* --- Tree View --- */
+  .tree-view {
+    font-size: 11px;
+    font-family: 'SF Mono', 'Fira Code', monospace;
+    line-height: 1.6;
+    padding: 8px 12px;
+    background: #1e1e2e;
+    color: #cdd6f4;
+    border-radius: 6px;
+    overflow: auto;
+    max-height: 350px;
+    flex: 1;
+  }
+  .tree-view div {
+    white-space: pre;
+  }
+  .tree-indent { color: #45475a; }
+  .tree-old { color: #6c7086; text-decoration: line-through; }
+  .tree-new { color: #a6e3a1; font-weight: 600; }
+  .tree-keep { color: #89b4fa; }
+  .tree-flatten { color: #fab387; font-style: italic; }
+  .tree-remove { color: #f38ba8; text-decoration: line-through; }
+  .tree-role { color: #f9e2af; font-size: 10px; }
+  .view-toggle {
+    display: flex;
+    gap: 4px;
+    margin-bottom: 8px;
+  }
+  .view-toggle button {
+    padding: 4px 10px;
+    font-size: 10px;
+    font-weight: 500;
+    border: 1px solid #d1d5db;
+    border-radius: 4px;
+    background: #fff;
+    color: #6b7280;
+    cursor: pointer;
+  }
+  .view-toggle button.active {
+    background: #4f46e5;
+    color: #fff;
+    border-color: #4f46e5;
   }
 
   /* --- Token Preview --- */
@@ -304,10 +351,16 @@
 <div class="panel" id="panel-rename">
   <div class="summary" id="rename-summary" style="display:none">
     <div class="summary-stat">Renamable: <strong id="rename-count">0</strong></div>
+    <div class="summary-stat">Total layers: <strong id="rename-total">0</strong></div>
+  </div>
+  <div class="view-toggle" id="rename-view-toggle" style="display:none">
+    <button class="active" data-view="list">List</button>
+    <button data-view="tree">Tree Preview</button>
   </div>
   <div class="results" id="rename-results">
     <div class="results-empty">Select frames and click Scan to find renamable layers</div>
   </div>
+  <div class="tree-view" id="rename-tree" style="display:none"></div>
   <div class="btn-row">
     <button class="btn btn-secondary" id="rename-scan">Scan</button>
     <button class="btn btn-primary" id="rename-apply" disabled>Apply</button>

@@ -163,7 +163,20 @@ export function matchFingerprint(
     return { role: 'gallery', confidence: 80, source: 'structure' };
   }
 
-  // Repeater: 3+ same-type containers
+  // List: 3+ uniform children that are mostly text/containers (no images, no buttons)
+  // Typical nav menu or footer link list
+  if (
+    total >= 3 &&
+    allSameType &&
+    (containers >= 3 || texts >= 3) &&
+    images === 0 &&
+    buttons === 0 &&
+    icons === 0
+  ) {
+    return { role: 'list', confidence: 80, source: 'structure' };
+  }
+
+  // Repeater: 3+ same-type containers (with mixed content)
   if (total >= 3 && allSameType && containers >= 3) {
     return { role: 'row', confidence: 80, source: 'structure' };
   }

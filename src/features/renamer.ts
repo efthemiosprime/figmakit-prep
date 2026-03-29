@@ -1,4 +1,4 @@
-import type { AnalysisResult, RenameAction, ConfidenceSource } from '../shared/types';
+import type { AnalysisResult, RenameAction, NodeRole } from '../shared/types';
 import { AUTO_NAME_PATTERN, SEMANTIC_NAMES, HEADING_THRESHOLDS } from '../shared/constants';
 
 const ROLE_TO_NAME: Record<string, string> = {
@@ -27,6 +27,115 @@ const ROLE_TO_NAME: Record<string, string> = {
   'isi': 'isi',
   'header': 'header',
   'buttons': 'buttons',
+  'list': 'list',
+  'list-item': 'list-item',
+};
+
+// Composite parent roles that get parent-prefixed child names
+const COMPOSITE_ROLES = new Set<NodeRole>([
+  'card', 'hero', 'feature', 'cta', 'testimonial', 'button', 'list',
+]);
+
+// Parent role → child role → child element name (matches FigmaKit WP resolver name patterns)
+// Child element names that EXACTLY match FigmaKit WP plugin's
+// fk_resolve_from_name_patterns() regex patterns.
+//
+// Divi 4: card-header → et_pb_image, card-body → et_pb_text, card-cta → et_pb_button
+// Divi 5: same names → divi/image, divi/text, divi/button
+// Gutenberg: same names → core/image, core/paragraph, core/button
+const CHILD_ELEMENT_MAP: Record<string, Record<string, string>> = {
+  card: {
+    image: 'header',       // card-header → image (matches WP pattern)
+    heading: 'title',      // card-title → heading (matched via 'title' pattern)
+    text: 'body',          // card-body → text (matches WP pattern)
+    button: 'cta',         // card-cta → button (matches WP pattern)
+    divider: 'divider',    // card-divider
+    icon: 'icon',          // card-icon → image (matched via 'icon' pattern)
+    'flex-row': 'content', // card-content → text (matches WP pattern)
+    'flex-col': 'content', // card-content → text (matches WP pattern)
+    spacer: 'spacer',      // card-spacer
+  },
+  hero: {
+    image: 'image',        // hero-image → image (matched via 'image' pattern)
+    heading: 'title',      // hero-title → heading (matched via 'title' pattern)
+    text: 'description',   // hero-description → text (matched via 'description' pattern)
+    button: 'cta',         // hero-cta → button/cta (matched via 'cta' pattern)
+    icon: 'icon',          // hero-icon → image
+    'flex-row': 'content', // hero-content → text
+    'flex-col': 'content', // hero-content → text
+  },
+  feature: {
+    icon: 'icon',          // feature-icon → image
+    heading: 'title',      // feature-title → heading
+    text: 'description',   // feature-description → text
+    button: 'cta',         // feature-cta → button/cta
+    image: 'image',        // feature-image → image
+  },
+  cta: {
+    heading: 'title',      // cta-title → heading
+    text: 'description',   // cta-description → text
+    button: 'button',      // cta-button → button
+    image: 'image',        // cta-image → image
+  },
+  testimonial: {
+    image: 'avatar',       // testimonial-avatar → image (matched via 'avatar' pattern)
+    text: 'quote',         // testimonial-quote → testimonial (matched via 'quote' pattern)
+    heading: 'author',     // testimonial-author
+    icon: 'icon',          // testimonial-icon
+  },
+  button: {
+    text: 'label',         // button_label → text for Divi button_text extraction
+    heading: 'label',      // any text-like child is the button label
+    icon: 'icon',          // button_icon → SVG/vector icon in button
+    image: 'icon',         // small image in button = icon
+    wrapper: 'icon',       // SVG wrapper around vector = icon
+  },
+  list: {
+    text: 'item',          // list-item
+    heading: 'item',       // list-item
+    'list-item': 'item',   // list-item (already named Link)
+    button: 'item',        // clickable list item
+    'flex-col': 'item',    // wrapper around text = list item
+    'flex-row': 'item',    // wrapper around text = list item
+    container: 'item',     // container wrapper = list item
+    wrapper: 'item',       // wrapper = list item
+    image: 'image',        // exportable asset in list
+    icon: 'image',         // SVG/vector in list → image (exportable)
+  },
+};
+
+// Structural names that should just be lowercased, not fully renamed
+var STRUCTURAL_NAMES: Record<string, string> = {
+  'section': 'section',
+  'row': 'row',
+  'column': 'column',
+  'col': 'column',
+  'group': 'group',
+  'container': 'container',
+  'buttons': 'buttons',
+  'card': 'card',
+  'accordion': 'accordion',
+  'tabs': 'tabs',
+  'hero': 'hero',
+  'feature': 'feature',
+  'cta': 'cta',
+  'testimonial': 'testimonial',
+  'modal': 'modal',
+  'gallery': 'gallery',
+  'divider': 'divider',
+  'separator': 'divider',
+  'button': 'button',
+  'image': 'image',
+  'icon': 'icon',
+  'text': 'text',
+  'heading': 'heading',
+  'header': 'header',
+  'footer': 'footer',
+  'spacer': 'spacer',
+  'wrapper': 'wrapper',
+  'list': 'list',
+  'item': 'list-item',
+  'list-item': 'list-item',
 };
 
 function isAutoNamed(name: string): boolean {
@@ -38,81 +147,129 @@ function isSemanticName(name: string): boolean {
 }
 
 function getHeadingLevel(fontSize: number): number {
-  for (const { level, minSize } of HEADING_THRESHOLDS) {
-    if (fontSize >= minSize) return level;
+  for (var i = 0; i < HEADING_THRESHOLDS.length; i++) {
+    if (fontSize >= HEADING_THRESHOLDS[i].minSize) return HEADING_THRESHOLDS[i].level;
   }
   return 6;
 }
 
 /**
- * Generate a semantic name for an analyzed node.
- * Returns null if the node should not be renamed.
+ * Check if a name is a structural name that just needs lowercasing.
+ * E.g., "Section" → "section", "Row" → "row"
  */
-export function generateName(result: AnalysisResult): string | null {
-  const { name, role, type } = result;
+function getStructuralLowercase(name: string): string | null {
+  var lower = name.toLowerCase().trim();
+  // Exact match (e.g., "Section", "Row", "Card")
+  if (STRUCTURAL_NAMES[lower] && name !== lower) {
+    return STRUCTURAL_NAMES[lower];
+  }
+  return null;
+}
 
-  // Don't rename user-given or semantic names
-  if (!isAutoNamed(name)) return null;
-  if (isSemanticName(name)) return null;
-
-  // Don't rename low-confidence defaults
-  if (role === 'container' || role === 'unknown') return null;
+/**
+ * Generate a semantic name for an analyzed node, considering parent context.
+ * - Structural names (Section, Row, etc.) just get lowercased
+ * - Auto-generated names (Frame 1, Group 2) get semantic names
+ * - Children of composites (card, hero) get parent-prefixed names
+ */
+export function generateName(result: AnalysisResult, parentRole?: NodeRole): string | null {
+  var name = result.name;
+  var role = result.role;
+  var type = result.type;
 
   // Don't rename component definitions
   if (type === 'COMPONENT') return null;
 
-  // Heading with level
-  if (role === 'heading') {
-    const fontSize = result.tokens.typography?.fontSize ?? 16;
-    const level = getHeadingLevel(fontSize);
-    return `h${level}`;
+  // "Heading N" frames are wrappers (classified as wrapper by classifier)
+  // Don't rename them — they will be flattened instead.
+  // "Heading" without number → just lowercase
+  if (/^heading$/i.test(name) && name !== 'heading') {
+    return 'heading';
   }
 
-  return ROLE_TO_NAME[role] ?? null;
+  // Check if it's a structural name that just needs lowercasing
+  var lowered = getStructuralLowercase(name);
+  if (lowered) return lowered;
+
+  // Don't rename already-correct semantic names (already lowercase)
+  if (isSemanticName(name) && name === name.toLowerCase()) return null;
+
+  // Don't rename user-given non-auto names (unless they match structural names above)
+  if (!isAutoNamed(name) && !isSemanticName(name)) return null;
+
+  // Don't rename low-confidence defaults or decorative layers
+  if (role === 'container' || role === 'unknown' || role === 'background-shape') return null;
+
+  // If parent is a composite, use parent-prefixed naming
+  if (parentRole && COMPOSITE_ROLES.has(parentRole)) {
+    var elementMap = CHILD_ELEMENT_MAP[parentRole];
+    if (elementMap) {
+      var elementName = elementMap[role];
+      if (elementName) {
+        // Button children use _ separator (WP plugin expects button_label)
+        var separator = parentRole === 'button' ? '_' : '-';
+        return parentRole + separator + elementName;
+      }
+    }
+    // Inside a button, any container child is just a wrapper — skip renaming
+    if (parentRole === 'button' && (role === 'container' || role === 'flex-row' || role === 'flex-col' || role === 'wrapper')) {
+      return null;
+    }
+  }
+
+  // Heading with level
+  if (role === 'heading') {
+    var fontSize = result.tokens.typography ? result.tokens.typography.fontSize : 16;
+    var level = getHeadingLevel(fontSize);
+    return 'h' + level;
+  }
+
+  return ROLE_TO_NAME[role] || null;
 }
 
 /**
  * Collect renamable nodes from analysis results (recursively).
+ * Passes parent role context down so children of composites get prefixed names.
  */
 function collectRenamable(
   results: AnalysisResult[],
   actions: RenameAction[],
-  nameCount: Map<string, number>,
+  parentRole?: NodeRole,
 ): void {
-  for (const result of results) {
-    const suggested = generateName(result);
+  for (var ri = 0; ri < results.length; ri++) {
+    var result = results[ri];
+    var suggested = generateName(result, parentRole);
     if (suggested) {
-      // Handle duplicate names by appending index
-      const count = (nameCount.get(suggested) ?? 0) + 1;
-      nameCount.set(suggested, count);
-
-      const finalName = count === 1 ? suggested : `${suggested}-${count}`;
-
-      actions.push({
-        nodeId: result.id,
-        node: result.node,
-        currentName: result.name,
-        suggestedName: finalName,
-        confidence: result.confidence,
-        source: result.source,
-      });
+      // If already named exactly this, skip entirely
+      if (result.name !== suggested) {
+        actions.push({
+          nodeId: result.id,
+          node: result.node,
+          currentName: result.name,
+          suggestedName: suggested,
+          confidence: result.confidence,
+          source: result.source,
+        });
+      }
     }
 
-    // Recurse into children
+    // Recurse into children, passing this node's role as parent context
     if (result.children.length > 0) {
-      collectRenamable(result.children, actions, nameCount);
+      // Use the detected role as parent context for children
+      var childParentRole = COMPOSITE_ROLES.has(result.role) ? result.role : parentRole;
+      collectRenamable(result.children, actions, childParentRole);
     }
   }
 }
 
 /**
  * Scan analysis results for nodes that should be renamed.
- * Excludes user-named, semantic-named, and component definition nodes.
+ * Parent-context-aware: children of composite components (card, hero, feature, etc.)
+ * get parent-prefixed names matching FigmaKit's WP resolver patterns.
  */
 export function scanForRenaming(results: AnalysisResult[]): RenameAction[] {
-  const actions: RenameAction[] = [];
-  const nameCount = new Map<string, number>();
-  collectRenamable(results, actions, nameCount);
+  var actions: RenameAction[] = [];
+  collectRenamable(results, actions);
   return actions;
 }
 

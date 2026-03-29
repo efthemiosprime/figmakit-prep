@@ -57,17 +57,41 @@ function handleScan(msg: any): void {
 
     case 'renamer': {
       const actions = scanForRenaming(results);
+      // Build lookup of rename suggestions by node ID
+      var renameMap: Record<string, string> = {};
+      for (var ai = 0; ai < actions.length; ai++) {
+        renameMap[actions[ai].nodeId] = actions[ai].suggestedName;
+      }
+      // Send tree structure with parent-context-aware rename suggestions
+      const tree = results.map(function serializeTree(r: any): any {
+        return {
+          id: r.id,
+          name: r.name,
+          role: r.role,
+          confidence: r.confidence,
+          suggestedName: renameMap[r.id] || null,
+          canFlatten: r.canFlatten,
+          canRemove: r.canRemove,
+          depth: r.depth,
+          children: r.children.map(serializeTree),
+        };
+      });
       figma.ui.postMessage({
         type: 'scan-result',
         feature: 'renamer',
-        data: actions.map(a => ({
-          nodeId: a.nodeId,
-          currentName: a.currentName,
-          suggestedName: a.suggestedName,
-          confidence: a.confidence,
-          source: a.source,
-          node: a.node,
-        })),
+        data: {
+          actions: actions.map(function(a: any) {
+            return {
+              nodeId: a.nodeId,
+              currentName: a.currentName,
+              suggestedName: a.suggestedName,
+              confidence: a.confidence,
+              source: a.source,
+              node: a.node,
+            };
+          }),
+          tree: tree,
+        },
       });
       break;
     }

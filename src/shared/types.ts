@@ -7,6 +7,7 @@ export type NodeRole =
   | 'accordion' | 'tabs' | 'modal' | 'gallery'
   | 'background-shape' | 'mask' | 'invisible'
   | 'isi' | 'header'
+  | 'list' | 'list-item'
   | 'unknown';
 
 export const NODE_ROLES: NodeRole[] = [
@@ -18,6 +19,7 @@ export const NODE_ROLES: NodeRole[] = [
   'accordion', 'tabs', 'modal', 'gallery',
   'background-shape', 'mask', 'invisible',
   'isi', 'header',
+  'list', 'list-item',
   'unknown',
 ];
 

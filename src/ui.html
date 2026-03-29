@@ -1,15 +1,424 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <style>
-    * { margin: 0; padding: 0; box-sizing: border-box; }
-    body { font-family: Inter, system-ui, sans-serif; font-size: 12px; color: #333; }
-  </style>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: Inter, system-ui, -apple-system, sans-serif;
+    font-size: 12px;
+    color: #333;
+    background: #fff;
+    overflow: hidden;
+  }
+
+  /* --- Header --- */
+  .header {
+    padding: 12px 16px 0;
+    border-bottom: 1px solid #e5e5e5;
+  }
+  .header h1 {
+    font-size: 14px;
+    font-weight: 600;
+    margin-bottom: 8px;
+    color: #1a1a2e;
+  }
+
+  /* --- Tabs --- */
+  .tabs {
+    display: flex;
+    gap: 0;
+  }
+  .tab {
+    padding: 8px 12px;
+    font-size: 11px;
+    font-weight: 500;
+    color: #666;
+    cursor: pointer;
+    border-bottom: 2px solid transparent;
+    transition: color 0.15s, border-color 0.15s;
+    user-select: none;
+  }
+  .tab:hover { color: #333; }
+  .tab.active {
+    color: #4f46e5;
+    border-bottom-color: #4f46e5;
+  }
+
+  /* --- Tab Panels --- */
+  .panel {
+    display: none;
+    padding: 16px;
+    height: calc(100vh - 96px - 36px);
+    overflow-y: auto;
+  }
+  .panel.active { display: block; }
+
+  /* --- Buttons --- */
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 8px 16px;
+    font-size: 12px;
+    font-weight: 500;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: background 0.15s, opacity 0.15s;
+  }
+  .btn:disabled { opacity: 0.4; cursor: not-allowed; }
+  .btn-primary {
+    background: #4f46e5;
+    color: #fff;
+  }
+  .btn-primary:hover:not(:disabled) { background: #4338ca; }
+  .btn-secondary {
+    background: #f3f4f6;
+    color: #374151;
+  }
+  .btn-secondary:hover:not(:disabled) { background: #e5e7eb; }
+  .btn-sm {
+    padding: 4px 10px;
+    font-size: 11px;
+  }
+  .btn-row {
+    display: flex;
+    gap: 8px;
+    margin-top: 12px;
+  }
+
+  /* --- Results List --- */
+  .results {
+    margin-top: 12px;
+    border: 1px solid #e5e5e5;
+    border-radius: 6px;
+    max-height: 320px;
+    overflow-y: auto;
+  }
+  .results-empty {
+    padding: 24px;
+    text-align: center;
+    color: #9ca3af;
+    font-size: 12px;
+  }
+  .result-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 12px;
+    border-bottom: 1px solid #f3f4f6;
+    font-size: 11px;
+  }
+  .result-item:last-child { border-bottom: none; }
+  .result-item input[type="checkbox"] {
+    flex-shrink: 0;
+    width: 14px;
+    height: 14px;
+  }
+  .result-name {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .result-arrow {
+    color: #9ca3af;
+    flex-shrink: 0;
+  }
+  .result-suggested {
+    color: #4f46e5;
+    font-weight: 500;
+    flex-shrink: 0;
+  }
+  .result-confidence {
+    font-size: 10px;
+    padding: 2px 6px;
+    border-radius: 10px;
+    flex-shrink: 0;
+  }
+  .conf-high { background: #dcfce7; color: #166534; }
+  .conf-mid { background: #fef9c3; color: #854d0e; }
+  .conf-low { background: #fee2e2; color: #991b1b; }
+
+  /* --- Summary Bar --- */
+  .summary {
+    display: flex;
+    gap: 12px;
+    padding: 10px 12px;
+    background: #f9fafb;
+    border-radius: 6px;
+    margin-bottom: 8px;
+  }
+  .summary-stat {
+    font-size: 11px;
+    color: #6b7280;
+  }
+  .summary-stat strong {
+    color: #111827;
+    font-weight: 600;
+  }
+
+  /* --- Token Preview --- */
+  .token-tabs {
+    display: flex;
+    gap: 0;
+    margin-bottom: 8px;
+    border-bottom: 1px solid #e5e5e5;
+  }
+  .token-tab {
+    padding: 6px 10px;
+    font-size: 10px;
+    font-weight: 500;
+    color: #666;
+    cursor: pointer;
+    border-bottom: 2px solid transparent;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+  .token-tab.active {
+    color: #4f46e5;
+    border-bottom-color: #4f46e5;
+  }
+  .token-output {
+    background: #1e1e2e;
+    color: #cdd6f4;
+    padding: 12px;
+    border-radius: 6px;
+    font-family: 'SF Mono', 'Fira Code', monospace;
+    font-size: 11px;
+    line-height: 1.6;
+    white-space: pre-wrap;
+    overflow-y: auto;
+    max-height: 300px;
+    position: relative;
+  }
+  .copy-btn {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    padding: 4px 8px;
+    font-size: 10px;
+    background: rgba(255,255,255,0.1);
+    color: #cdd6f4;
+    border: 1px solid rgba(255,255,255,0.15);
+    border-radius: 4px;
+    cursor: pointer;
+  }
+  .copy-btn:hover { background: rgba(255,255,255,0.2); }
+
+  /* --- Validation Tiers --- */
+  .tier-section {
+    margin-bottom: 12px;
+  }
+  .tier-header {
+    font-size: 12px;
+    font-weight: 600;
+    padding: 6px 0;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .tier-count {
+    font-size: 10px;
+    padding: 1px 6px;
+    border-radius: 10px;
+    font-weight: 500;
+  }
+
+  /* --- Label Panel --- */
+  .label-section { margin-bottom: 16px; }
+  .label-section h3 {
+    font-size: 12px;
+    font-weight: 600;
+    margin-bottom: 8px;
+  }
+  .label-mode {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 12px;
+  }
+  .label-mode label {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 11px;
+    cursor: pointer;
+  }
+  select {
+    width: 100%;
+    padding: 6px 8px;
+    font-size: 12px;
+    border: 1px solid #d1d5db;
+    border-radius: 6px;
+    background: #fff;
+    margin-bottom: 8px;
+  }
+
+  /* --- Status Bar --- */
+  .status-bar {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    padding: 8px 16px;
+    background: #f9fafb;
+    border-top: 1px solid #e5e5e5;
+    font-size: 11px;
+    color: #6b7280;
+    display: flex;
+    justify-content: space-between;
+  }
+</style>
 </head>
 <body>
-  <div id="app">
-    <p>FigmaKit Prep</p>
+
+<div class="header">
+  <h1>FigmaKit Prep</h1>
+  <div class="tabs">
+    <div class="tab active" data-tab="clean">Clean</div>
+    <div class="tab" data-tab="rename">Rename</div>
+    <div class="tab" data-tab="validate">Validate</div>
+    <div class="tab" data-tab="label">Label</div>
+    <div class="tab" data-tab="tokens">Tokens</div>
   </div>
-  <!-- INLINE_SCRIPT -->
+</div>
+
+<!-- Clean Panel -->
+<div class="panel active" id="panel-clean">
+  <div class="summary" id="clean-summary" style="display:none">
+    <div class="summary-stat">Removable: <strong id="clean-removable-count">0</strong></div>
+    <div class="summary-stat">Flattenable: <strong id="clean-flattenable-count">0</strong></div>
+    <div class="summary-stat">Safe: <strong id="clean-safe-count">0</strong></div>
+  </div>
+  <div class="results" id="clean-results">
+    <div class="results-empty">Select frames and click Scan to find removable layers</div>
+  </div>
+  <div class="btn-row">
+    <button class="btn btn-secondary" id="clean-scan">Scan</button>
+    <button class="btn btn-primary" id="clean-apply" disabled>Clean</button>
+  </div>
+</div>
+
+<!-- Rename Panel -->
+<div class="panel" id="panel-rename">
+  <div class="summary" id="rename-summary" style="display:none">
+    <div class="summary-stat">Renamable: <strong id="rename-count">0</strong></div>
+  </div>
+  <div class="results" id="rename-results">
+    <div class="results-empty">Select frames and click Scan to find renamable layers</div>
+  </div>
+  <div class="btn-row">
+    <button class="btn btn-secondary" id="rename-scan">Scan</button>
+    <button class="btn btn-primary" id="rename-apply" disabled>Apply</button>
+  </div>
+</div>
+
+<!-- Validate Panel -->
+<div class="panel" id="panel-validate">
+  <div id="validate-report" style="display:none">
+    <div class="tier-section" id="tier-high">
+      <div class="tier-header">High Confidence <span class="tier-count conf-high" id="validate-high-count">0</span></div>
+      <div class="results" id="validate-high-list"></div>
+    </div>
+    <div class="tier-section" id="tier-mid">
+      <div class="tier-header">Needs Review <span class="tier-count conf-mid" id="validate-mid-count">0</span></div>
+      <div class="results" id="validate-mid-list"></div>
+    </div>
+    <div class="tier-section" id="tier-low">
+      <div class="tier-header">Low Confidence <span class="tier-count conf-low" id="validate-low-count">0</span></div>
+      <div class="results" id="validate-low-list"></div>
+    </div>
+    <div class="tier-section" id="tier-skipped">
+      <div class="tier-header">Skipped <span class="tier-count" id="validate-skipped-count" style="background:#f3f4f6;color:#6b7280">0</span></div>
+      <div class="results" id="validate-skipped-list"></div>
+    </div>
+  </div>
+  <div class="results" id="validate-empty">
+    <div class="results-empty">Select frames and click Validate</div>
+  </div>
+  <div class="btn-row">
+    <button class="btn btn-secondary" id="validate-scan">Validate</button>
+  </div>
+</div>
+
+<!-- Label Panel -->
+<div class="panel" id="panel-label">
+  <div class="label-section">
+    <h3>Component Label</h3>
+    <select id="label-role">
+      <option value="">Select type...</option>
+      <option value="text">text</option>
+      <option value="heading">heading</option>
+      <option value="image">image</option>
+      <option value="icon">icon</option>
+      <option value="button">button</option>
+      <option value="divider">divider</option>
+      <option value="spacer">spacer</option>
+      <option value="section">section</option>
+      <option value="row">row</option>
+      <option value="column">column</option>
+      <option value="group">group</option>
+      <option value="card">card</option>
+      <option value="hero">hero</option>
+      <option value="feature">feature</option>
+      <option value="cta">cta</option>
+      <option value="testimonial">testimonial</option>
+      <option value="accordion">accordion</option>
+      <option value="tabs">tabs</option>
+      <option value="modal">modal</option>
+      <option value="gallery">gallery</option>
+      <option value="isi">isi</option>
+      <option value="header">header</option>
+    </select>
+    <div class="label-mode">
+      <label><input type="radio" name="label-mode" value="prefix" checked> Name prefix</label>
+      <label><input type="radio" name="label-mode" value="pluginData"> Plugin data</label>
+      <label><input type="radio" name="label-mode" value="both"> Both</label>
+    </div>
+    <div class="btn-row">
+      <button class="btn btn-primary" id="label-apply">Apply Label</button>
+      <button class="btn btn-secondary" id="label-remove">Remove Label</button>
+    </div>
+  </div>
+
+  <div class="label-section">
+    <h3>BEM Formatter</h3>
+    <label style="display:flex;align-items:center;gap:4px;font-size:11px;margin-bottom:8px">
+      <input type="checkbox" id="bem-modifiers"> Include variant modifiers
+    </label>
+    <div class="results" id="bem-results">
+      <div class="results-empty">Select a composite component and click Scan</div>
+    </div>
+    <div class="btn-row">
+      <button class="btn btn-secondary" id="bem-scan">Scan</button>
+      <button class="btn btn-primary" id="bem-apply" disabled>Apply BEM</button>
+    </div>
+  </div>
+</div>
+
+<!-- Tokens Panel -->
+<div class="panel" id="panel-tokens">
+  <div class="token-tabs">
+    <div class="token-tab active" data-format="css">CSS</div>
+    <div class="token-tab" data-format="scss">SCSS</div>
+    <div class="token-tab" data-format="utility">Utility</div>
+    <div class="token-tab" data-format="gutenberg">Gutenberg</div>
+  </div>
+  <div style="position:relative">
+    <div class="token-output" id="token-output">Select a node and click Scan to preview tokens</div>
+    <button class="copy-btn" id="token-copy">Copy</button>
+  </div>
+  <div class="btn-row">
+    <button class="btn btn-secondary" id="token-scan">Scan</button>
+  </div>
+</div>
+
+<div class="status-bar">
+  <span id="status-text">Ready</span>
+  <span id="status-selection">No selection</span>
+</div>
+
+<!-- INLINE_SCRIPT -->
 </body>
 </html>

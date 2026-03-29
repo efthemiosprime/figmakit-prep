@@ -143,6 +143,26 @@ qs('#bem-apply').addEventListener('click', () => {
   setStatus('Applying BEM...');
 });
 
+// --- Assets Mark Exportable ---
+qs('#assets-export').addEventListener('click', function() {
+  var checks = qsa('#assets-results .asset-export-check');
+  var exports: any[] = [];
+  checks.forEach(function(cb: any) {
+    if (!cb.checked) return;
+    var nodeId = cb.dataset.nodeId;
+    // Find the format and scale selects for this node
+    var formatSelect = qs('#assets-results .asset-format-select[data-node-id="' + nodeId + '"]') as HTMLSelectElement;
+    var scaleSelect = qs('#assets-results .asset-scale-select[data-node-id="' + nodeId + '"]') as HTMLSelectElement;
+    var format = formatSelect ? formatSelect.value : 'PNG';
+    var scale = scaleSelect ? parseInt(scaleSelect.value) : 1;
+    exports.push({ nodeId: nodeId, format: format, scale: scale });
+  });
+  if (exports.length > 0) {
+    post({ type: 'apply', feature: 'export-settings', exports: exports });
+    setStatus('Marking ' + exports.length + ' assets as exportable...');
+  }
+});
+
 // --- Token Generate SCSS ---
 qs('#token-generate').addEventListener('click', function() {
   var lines: string[] = [];
@@ -574,7 +594,7 @@ function renderAssetResults(data: any[]) {
 
     html += '<div class="asset-info">';
     html += '<div style="display:flex;align-items:center;gap:6px">';
-    html += '<span class="asset-type ' + typeClass + '">' + asset.format.toUpperCase() + '</span>';
+    html += '<span class="asset-type ' + typeClass + '" data-node-id="' + asset.nodeId + '">' + asset.format.toUpperCase() + '</span>';
     html += '<span class="result-name">' + escHtml(asset.name) + '</span>';
     html += '</div>';
     if (sizeStr) {
@@ -602,11 +622,43 @@ function renderAssetResults(data: any[]) {
       html += '</div>';
     }
 
+    // Export controls
+    var defaultFormat = asset.type === 'icon' || asset.type === 'svg' || asset.type === 'vector' ? 'SVG' : 'PNG';
+    html += '<div class="asset-export-row">';
+    html += '<label><input type="checkbox" class="asset-export-check" data-node-id="' + asset.nodeId + '" checked> Export</label>';
+    html += '<select class="asset-format-select" data-node-id="' + asset.nodeId + '">';
+    var formats = ['PNG', 'SVG', 'JPG', 'PDF'];
+    for (var fi = 0; fi < formats.length; fi++) {
+      var sel = formats[fi] === defaultFormat ? ' selected' : '';
+      html += '<option value="' + formats[fi] + '"' + sel + '>' + formats[fi] + '</option>';
+    }
+    html += '</select>';
+    html += '<select class="asset-scale-select" data-node-id="' + asset.nodeId + '">';
+    html += '<option value="1">1x</option>';
+    html += '<option value="2">2x</option>';
+    html += '<option value="3">3x</option>';
+    html += '</select>';
+    html += '</div>';
+
     html += '</div>';
   }
 
   container.innerHTML = html;
   (qs('#assets-apply') as HTMLButtonElement).disabled = withIssues.length === 0;
+  (qs('#assets-export') as HTMLButtonElement).disabled = false;
+
+  // Update format badge when dropdown changes
+  qsa('#assets-results .asset-format-select').forEach(function(sel: any) {
+    sel.addEventListener('change', function() {
+      var nodeId = sel.dataset.nodeId;
+      var badge = qs('#assets-results .asset-type[data-node-id="' + nodeId + '"]');
+      if (badge) {
+        var val = sel.value;
+        badge.textContent = val;
+        badge.className = 'asset-type asset-type-' + val.toLowerCase();
+      }
+    });
+  });
 
   // Set preview images from byte arrays → blob URLs
   for (var pi = 0; pi < data.length; pi++) {

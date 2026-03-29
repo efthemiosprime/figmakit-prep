@@ -426,6 +426,8 @@
   .asset-type-png { background: #dcfce7; color: #166534; }
   .asset-type-icon { background: #f3e8ff; color: #7c3aed; }
   .asset-type-vector { background: #fef3c7; color: #92400e; }
+  .asset-type-jpg { background: #ffedd5; color: #9a3412; }
+  .asset-type-pdf { background: #fee2e2; color: #991b1b; }
   .asset-dims {
     font-size: 10px;
     color: #9ca3af;
@@ -461,6 +463,48 @@
   }
   .asset-bad {
     border-left: 3px solid #f59e0b;
+  }
+
+  /* --- Export Controls --- */
+  .asset-export-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-top: 6px;
+  }
+  .asset-export-row select {
+    width: auto;
+    padding: 3px 6px;
+    font-size: 10px;
+    margin-bottom: 0;
+  }
+  .asset-export-row label {
+    font-size: 10px;
+    color: #6b7280;
+    display: flex;
+    align-items: center;
+    gap: 3px;
+    cursor: pointer;
+  }
+  .asset-export-row input[type="checkbox"] {
+    width: 13px;
+    height: 13px;
+  }
+  .export-badge {
+    font-size: 9px;
+    padding: 1px 5px;
+    border-radius: 3px;
+    background: #dcfce7;
+    color: #166534;
+    font-weight: 500;
+  }
+  .no-export-badge {
+    font-size: 9px;
+    padding: 1px 5px;
+    border-radius: 3px;
+    background: #fee2e2;
+    color: #991b1b;
+    font-weight: 500;
   }
 
   /* --- Status Bar --- */
@@ -630,6 +674,7 @@
   <div class="btn-row">
     <button class="btn btn-secondary" id="assets-scan">Scan</button>
     <button class="btn btn-primary" id="assets-apply" disabled>Rename Assets</button>
+    <button class="btn btn-primary" id="assets-export" disabled>Mark Exportable</button>
   </div>
 </div>
 

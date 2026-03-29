@@ -349,6 +349,60 @@ async function handleApply(msg: any): Promise<void> {
       break;
     }
 
+    case 'export-settings': {
+      var exportCount = 0;
+      var exportList = msg.exports || [];
+      for (var ei = 0; ei < exportList.length; ei++) {
+        var exp = exportList[ei];
+        try {
+          var expNode = await figma.getNodeByIdAsync(exp.nodeId);
+          if (expNode && 'exportSettings' in expNode) {
+            var settings: any[] = [];
+            var format = exp.format || 'PNG';
+            var scale = exp.scale || 1;
+
+            if (format === 'SVG') {
+              settings.push({ format: 'SVG', suffix: '', contentsOnly: true });
+            } else if (format === 'PDF') {
+              settings.push({ format: 'PDF', suffix: '', contentsOnly: true });
+            } else {
+              // PNG or JPG — add 1x base
+              settings.push({
+                format: format,
+                suffix: '',
+                constraint: { type: 'SCALE', value: 1 },
+                contentsOnly: true,
+              });
+              // Add higher scale if requested
+              if (scale >= 2) {
+                settings.push({
+                  format: format,
+                  suffix: '@2x',
+                  constraint: { type: 'SCALE', value: 2 },
+                  contentsOnly: true,
+                });
+              }
+              if (scale >= 3) {
+                settings.push({
+                  format: format,
+                  suffix: '@3x',
+                  constraint: { type: 'SCALE', value: 3 },
+                  contentsOnly: true,
+                });
+              }
+            }
+
+            (expNode as any).exportSettings = settings;
+            exportCount++;
+          }
+        } catch (e) {
+          // Skip nodes that can't have export settings
+        }
+      }
+      figma.ui.postMessage({ type: 'apply-result', feature: 'export-settings', data: exportCount });
+      break;
+    }
+
     default:
       figma.ui.postMessage({ type: 'error', message: 'Unknown feature: ' + feature });
   }

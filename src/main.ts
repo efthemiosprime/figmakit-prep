@@ -1,2 +1,216 @@
-// FigmaKit Prep — Plugin entry point (Figma sandbox)
-figma.showUI(__html__, { width: 480, height: 600 });
+import { analyzeNode, analyzeSelection } from './core/analyzer';
+import { scanForCleaning, applyClean } from './features/cleaner';
+import { scanForRenaming, applyRenames } from './features/renamer';
+import { generateReport } from './features/validator';
+import { applyLabel, batchLabel } from './features/labeler';
+import { generateBEMNames, applyBEMNames } from './features/bem-formatter';
+import { extractTokens, formatTokens } from './features/token-preview';
+import type { CleanActionItem, RenameAction } from './shared/types';
+
+/**
+ * Get the nodes to analyze: selection if available, otherwise all page children.
+ */
+function getTargetNodes(): readonly any[] {
+  const selection = figma.currentPage.selection;
+  if (selection.length > 0) return selection;
+  return figma.currentPage.children;
+}
+
+/**
+ * Handle a message from the UI.
+ */
+export function handleMessage(msg: any): void {
+  try {
+    const { type } = msg;
+
+    if (type === 'scan') {
+      handleScan(msg);
+    } else if (type === 'apply') {
+      handleApply(msg);
+    } else {
+      figma.ui.postMessage({ type: 'error', message: `Unknown message type: ${type}` });
+    }
+  } catch (err: any) {
+    figma.ui.postMessage({ type: 'error', message: err.message ?? 'Unknown error' });
+  }
+}
+
+function handleScan(msg: any): void {
+  const { feature } = msg;
+  const nodes = getTargetNodes();
+  const results = analyzeSelection(nodes);
+
+  switch (feature) {
+    case 'cleaner': {
+      const scan = scanForCleaning(results);
+      figma.ui.postMessage({
+        type: 'scan-result',
+        feature: 'cleaner',
+        data: {
+          removable: serializeResults(scan.removable),
+          flattenable: serializeResults(scan.flattenable),
+          safe: serializeResults(scan.safe),
+        },
+      });
+      break;
+    }
+
+    case 'renamer': {
+      const actions = scanForRenaming(results);
+      figma.ui.postMessage({
+        type: 'scan-result',
+        feature: 'renamer',
+        data: actions.map(a => ({
+          nodeId: a.nodeId,
+          currentName: a.currentName,
+          suggestedName: a.suggestedName,
+          confidence: a.confidence,
+          source: a.source,
+          node: a.node,
+        })),
+      });
+      break;
+    }
+
+    case 'validator': {
+      const report = generateReport(results);
+      figma.ui.postMessage({
+        type: 'scan-result',
+        feature: 'validator',
+        data: report,
+      });
+      break;
+    }
+
+    case 'tokens': {
+      // Extract tokens from first selected node (or first result)
+      const result = results[0];
+      if (!result) {
+        figma.ui.postMessage({
+          type: 'scan-result',
+          feature: 'tokens',
+          data: { tokens: null, formatted: {} },
+        });
+        break;
+      }
+      const tokens = extractTokens(result);
+      figma.ui.postMessage({
+        type: 'scan-result',
+        feature: 'tokens',
+        data: {
+          tokens,
+          formatted: {
+            css: formatTokens(tokens, 'css'),
+            scss: formatTokens(tokens, 'scss'),
+            utility: formatTokens(tokens, 'utility'),
+            gutenberg: formatTokens(tokens, 'gutenberg'),
+          },
+        },
+      });
+      break;
+    }
+
+    case 'bem': {
+      const result = results[0];
+      if (!result) {
+        figma.ui.postMessage({ type: 'scan-result', feature: 'bem', data: [] });
+        break;
+      }
+      const mappings = generateBEMNames(result);
+      figma.ui.postMessage({
+        type: 'scan-result',
+        feature: 'bem',
+        data: mappings.map(m => ({
+          nodeId: m.nodeId,
+          currentName: m.currentName,
+          bemName: m.bemName,
+          node: m.node,
+        })),
+      });
+      break;
+    }
+
+    default:
+      figma.ui.postMessage({ type: 'error', message: `Unknown feature: ${feature}` });
+  }
+}
+
+function handleApply(msg: any): void {
+  const { feature } = msg;
+
+  switch (feature) {
+    case 'cleaner': {
+      const result = applyClean(msg.actions as CleanActionItem[]);
+      figma.ui.postMessage({ type: 'apply-result', feature: 'cleaner', data: result });
+      break;
+    }
+
+    case 'renamer': {
+      const count = applyRenames(msg.actions as RenameAction[]);
+      figma.ui.postMessage({ type: 'apply-result', feature: 'renamer', data: count });
+      break;
+    }
+
+    case 'labeler': {
+      if (msg.role && msg.mode) {
+        // Single node label
+        const nodes = getTargetNodes();
+        if (nodes.length > 0) {
+          applyLabel(nodes[0], msg.role, msg.mode);
+        }
+        figma.ui.postMessage({ type: 'apply-result', feature: 'labeler', data: 'ok' });
+      } else if (msg.batchMode) {
+        // Batch label
+        const results = analyzeSelection(getTargetNodes());
+        const count = batchLabel(results, msg.mode ?? 'prefix');
+        figma.ui.postMessage({ type: 'apply-result', feature: 'labeler', data: count });
+      }
+      break;
+    }
+
+    case 'bem': {
+      const nodes = getTargetNodes();
+      const results = analyzeSelection(nodes);
+      if (results.length > 0) {
+        const count = applyBEMNames(results[0], msg.includeModifiers ?? false);
+        figma.ui.postMessage({ type: 'apply-result', feature: 'bem', data: count });
+      } else {
+        figma.ui.postMessage({ type: 'apply-result', feature: 'bem', data: 0 });
+      }
+      break;
+    }
+
+    default:
+      figma.ui.postMessage({ type: 'error', message: `Unknown feature: ${feature}` });
+  }
+}
+
+/**
+ * Serialize analysis results for posting to UI (strip node references for large trees).
+ */
+function serializeResults(results: any[]): any[] {
+  return results.map(r => ({
+    id: r.id,
+    name: r.name,
+    role: r.role,
+    confidence: r.confidence,
+    canRemove: r.canRemove,
+    canFlatten: r.canFlatten,
+    removeReason: r.removeReason,
+    node: r.node,
+  }));
+}
+
+/**
+ * Set up the message handler for the plugin.
+ */
+export function setupMessageHandler(): void {
+  figma.ui.onmessage = handleMessage;
+}
+
+// --- Plugin initialization ---
+// Guard: only run in Figma sandbox (not in test environment)
+if (typeof figma !== 'undefined' && typeof __html__ !== 'undefined') {
+  figma.showUI(__html__, { width: 480, height: 600 });
+  setupMessageHandler();
+}

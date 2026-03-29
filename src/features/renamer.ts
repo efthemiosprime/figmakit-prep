@@ -264,6 +264,11 @@ export function generateName(result: AnalysisResult, parentRole?: NodeRole): str
   // "icon.Something" → "icon"
   if (/^icon\./i.test(name)) return 'icon';
 
+  // Long layer names (40+ chars) that are the actual text content → "text"
+  // Figma auto-names TEXT nodes with their content when no explicit name is set
+  if (name.length >= 40 && role === 'text') return 'text';
+  if (name.length >= 40 && role === 'heading') return 'text';
+
   // "module-left", "module-right" → card with layout suffix
   if (/^module[-_](left|right)/i.test(name)) return withLayoutSuffix('card', result);
 

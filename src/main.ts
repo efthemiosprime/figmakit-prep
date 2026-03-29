@@ -264,20 +264,24 @@ async function handleApply(msg: any): Promise<void> {
         var action = actions[ci];
         var node = await figma.getNodeByIdAsync(action.nodeId);
         if (!node) continue;
-        if (action.action === 'remove') {
-          node.remove();
-          removed++;
-        } else if (action.action === 'flatten') {
-          var parent = node.parent;
-          if (parent && 'children' in node && (node as any).children.length === 1) {
-            var child = (node as any).children[0];
-            var idx = parent.children.indexOf(node);
-            child.x = (child.x || 0) + ((node as any).x || 0);
-            child.y = (child.y || 0) + ((node as any).y || 0);
-            parent.insertChild(idx, child);
+        try {
+          if (action.action === 'remove') {
             node.remove();
-            flattened++;
+            removed++;
+          } else if (action.action === 'flatten') {
+            var parent = node.parent;
+            if (parent && 'children' in node && (node as any).children.length === 1) {
+              var child = (node as any).children[0];
+              var idx = parent.children.indexOf(node);
+              child.x = (child.x || 0) + ((node as any).x || 0);
+              child.y = (child.y || 0) + ((node as any).y || 0);
+              parent.insertChild(idx, child);
+              node.remove();
+              flattened++;
+            }
           }
+        } catch (e) {
+          // Skip nodes that can't be removed (locked, top-level, etc.)
         }
       }
       figma.ui.postMessage({ type: 'apply-result', feature: 'cleaner', data: { removed: removed, flattened: flattened } });

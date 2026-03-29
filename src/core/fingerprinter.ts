@@ -126,8 +126,11 @@ export function fingerprintChildren(children: any[]): Fingerprint | null {
 export function matchFingerprint(
   node: any,
   fingerprint: Fingerprint | null,
+  children?: any[],
 ): Classification | null {
   if (!fingerprint) return null;
+
+  if (!children) children = safeGetChildren(node);
 
   var w = fingerprint.parentWidth || safeGetNumber(node, 'width', 0);
   var h = fingerprint.parentHeight || safeGetNumber(node, 'height', 0);
@@ -157,17 +160,44 @@ export function matchFingerprint(
     return { role: 'gallery', confidence: 80, source: 'structure' };
   }
 
-  // List: 3+ uniform children that are mostly text/containers (no images, no buttons)
-  // Typical nav menu or footer link list
+  // List: 3+ uniform text-only children (no images, no buttons, no icons)
+  // Only pure text lists qualify — icon+text combos are feature groups
   if (
     total >= 3 &&
     allSameType &&
-    (containers >= 3 || texts >= 3) &&
+    texts >= 3 &&
+    containers === 0 &&
     images === 0 &&
     buttons === 0 &&
     icons === 0
   ) {
     return { role: 'list', confidence: 80, source: 'structure' };
+  }
+
+  // List with container children: only if each container has a single text child
+  // (e.g., Link wrappers around text). If containers have mixed content (icon+text), it's a group.
+  if (
+    total >= 3 &&
+    allSameType &&
+    containers >= 3 &&
+    images === 0 &&
+    buttons === 0 &&
+    icons === 0
+  ) {
+    // Check if container children are simple (single text child each)
+    var allSimple = true;
+    for (var li = 0; li < children.length; li++) {
+      var listChild = children[li];
+      var lcChildren = safeGetChildren(listChild);
+      if (lcChildren.length === 0) continue;
+      // If any child has more than 1 grandchild or has non-text grandchildren, it's complex
+      if (lcChildren.length > 1) { allSimple = false; break; }
+      var grandchildType = safeGetString(lcChildren[0], 'type', '');
+      if (grandchildType !== 'TEXT') { allSimple = false; break; }
+    }
+    if (allSimple) {
+      return { role: 'list', confidence: 80, source: 'structure' };
+    }
   }
 
   // Repeater: 3+ same-type containers (with mixed content)

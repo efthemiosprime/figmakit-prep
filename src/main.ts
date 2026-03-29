@@ -5,6 +5,7 @@ import { generateReport } from './features/validator';
 import { applyLabel, batchLabel } from './features/labeler';
 import { generateBEMNames, applyBEMNames } from './features/bem-formatter';
 import { extractTokens, formatTokens } from './features/token-preview';
+import { aggregateTokens } from './features/token-aggregator';
 import { scanAssets } from './features/asset-analyzer';
 import type { CleanActionItem, RenameAction } from './shared/types';
 
@@ -153,28 +154,28 @@ async function handleScan(msg: any): Promise<void> {
     }
 
     case 'tokens': {
-      // Extract tokens from first selected node (or first result)
-      const result = results[0];
-      if (!result) {
-        figma.ui.postMessage({
-          type: 'scan-result',
-          feature: 'tokens',
-          data: { tokens: null, formatted: {} },
-        });
-        break;
+      // Aggregate tokens from all nodes in the tree
+      var aggregated = aggregateTokens(results);
+
+      // Also get formatted output from first node for code preview
+      var firstResult = results[0];
+      var formatted: Record<string, string> = {};
+      if (firstResult) {
+        var tokens = extractTokens(firstResult);
+        formatted = {
+          css: formatTokens(tokens, 'css'),
+          scss: formatTokens(tokens, 'scss'),
+          utility: formatTokens(tokens, 'utility'),
+          gutenberg: formatTokens(tokens, 'gutenberg'),
+        };
       }
-      const tokens = extractTokens(result);
+
       figma.ui.postMessage({
         type: 'scan-result',
         feature: 'tokens',
         data: {
-          tokens,
-          formatted: {
-            css: formatTokens(tokens, 'css'),
-            scss: formatTokens(tokens, 'scss'),
-            utility: formatTokens(tokens, 'utility'),
-            gutenberg: formatTokens(tokens, 'gutenberg'),
-          },
+          aggregated: aggregated,
+          formatted: formatted,
         },
       });
       break;

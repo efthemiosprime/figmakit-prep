@@ -48,11 +48,8 @@
   .panel {
     display: none;
     padding: 16px;
-    min-height: 200px;
-    max-height: calc(100vh - 120px);
-    overflow-y: auto;
   }
-  .panel.active { display: flex; flex-direction: column; }
+  .panel.active { display: block; overflow-y: auto; max-height: calc(100vh - 120px); }
 
   /* --- Buttons --- */
   .btn {
@@ -300,6 +297,73 @@
     border-radius: 6px;
     background: #fff;
     margin-bottom: 8px;
+  }
+
+  /* --- Token Inventory --- */
+  .token-section-header {
+    font-size: 11px;
+    font-weight: 600;
+    color: #374151;
+    padding: 8px 0 4px;
+    border-bottom: 1px solid #e5e5e5;
+    margin-bottom: 4px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .token-section-count {
+    font-size: 10px;
+    font-weight: 500;
+    padding: 1px 6px;
+    border-radius: 10px;
+    background: #f3f4f6;
+    color: #6b7280;
+  }
+  .token-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 0;
+    border-bottom: 1px solid #f9fafb;
+    font-size: 11px;
+  }
+  .token-item:last-child { border-bottom: none; }
+  .token-swatch {
+    width: 24px;
+    height: 24px;
+    border-radius: 4px;
+    border: 1px solid #d1d5db;
+    flex-shrink: 0;
+  }
+  .token-detail {
+    flex: 1;
+    min-width: 0;
+  }
+  .token-value {
+    font-family: 'SF Mono', 'Fira Code', monospace;
+    font-size: 10px;
+    color: #6b7280;
+  }
+  .token-usage {
+    font-size: 9px;
+    color: #9ca3af;
+    margin-top: 1px;
+  }
+  .token-name-input {
+    width: 120px;
+    padding: 2px 6px;
+    font-size: 10px;
+    border: 1px solid #d1d5db;
+    border-radius: 3px;
+    font-family: 'SF Mono', 'Fira Code', monospace;
+    flex-shrink: 0;
+  }
+  .token-count {
+    font-size: 10px;
+    color: #9ca3af;
+    flex-shrink: 0;
+    min-width: 20px;
+    text-align: right;
   }
 
   /* --- Asset Items --- */
@@ -571,18 +635,30 @@
 
 <!-- Tokens Panel -->
 <div class="panel" id="panel-tokens">
-  <div class="token-tabs">
-    <div class="token-tab active" data-format="css">CSS</div>
-    <div class="token-tab" data-format="scss">SCSS</div>
-    <div class="token-tab" data-format="utility">Utility</div>
-    <div class="token-tab" data-format="gutenberg">Gutenberg</div>
+  <div class="view-toggle" id="token-view-toggle" style="display:none">
+    <button class="active" data-view="inventory">Inventory</button>
+    <button data-view="code">Code</button>
   </div>
-  <div style="position:relative">
-    <div class="token-output" id="token-output">Select a node and click Scan to preview tokens</div>
-    <button class="copy-btn" id="token-copy">Copy</button>
+  <div id="token-inventory">
+    <div class="results" id="token-results">
+      <div class="results-empty">Select frames and click Scan to extract design tokens</div>
+    </div>
+  </div>
+  <div id="token-code-view" style="display:none">
+    <div class="token-tabs">
+      <div class="token-tab active" data-format="css">CSS</div>
+      <div class="token-tab" data-format="scss">SCSS</div>
+      <div class="token-tab" data-format="utility">Utility</div>
+      <div class="token-tab" data-format="gutenberg">Gutenberg</div>
+    </div>
+    <div style="position:relative">
+      <div class="token-output" id="token-output">No tokens yet</div>
+      <button class="copy-btn" id="token-copy">Copy</button>
+    </div>
   </div>
   <div class="btn-row">
     <button class="btn btn-secondary" id="token-scan">Scan</button>
+    <button class="btn btn-primary" id="token-generate" disabled>Generate SCSS</button>
   </div>
 </div>
 
@@ -591,6 +667,5 @@
   <span id="status-selection">No selection</span>
 </div>
 
-<!-- INLINE_SCRIPT -->
 </body>
 </html>

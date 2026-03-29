@@ -85,7 +85,7 @@ export const NAME_PATTERNS: NamePattern[] = [
   // Module patterns → CTA or card or container
   { pattern: /^module[-_\s]?(cta|signup|sign[-_]?up|crm)([-_\s/].*)?$/i, role: 'cta' },
   { pattern: /^module[-_\s]?(left|right)([-_\s/].*)?$/i, role: 'card' },
-  { pattern: /^module([-_\s/].*)?$/i, role: 'container' },
+  { pattern: /^module([-_\s/].*)?$/i, role: 'group' },
 
   // Website/primary header
   { pattern: /^website[-_\s]?header([-_\s/].*)?$/i, role: 'header' },

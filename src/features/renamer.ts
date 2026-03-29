@@ -200,7 +200,7 @@ function getStructuralLowercase(name: string): string | null {
  * - Auto-generated names (Frame 1, Group 2) get semantic names
  * - Children of composites (card, hero) get parent-prefixed names
  */
-export function generateName(result: AnalysisResult, parentRole?: NodeRole): string | null {
+export function generateName(result: AnalysisResult, parentRole?: NodeRole, insideSection?: boolean): string | null {
   var name = result.name;
   var role = result.role;
   var type = result.type;
@@ -275,6 +275,9 @@ export function generateName(result: AnalysisResult, parentRole?: NodeRole): str
   // "module-CRM-signup", "module-signup" → cta
   if (/^module[-_]?(cta|signup|sign[-_]?up|crm)/i.test(name)) return 'cta';
 
+  // "module" or "module-*" → group
+  if (/^module([-_\s/].*)?$/i.test(name)) return withLayoutSuffix('group', result);
+
   // "website-header-nav" → "header"
   if (/^website[-_]header/i.test(name)) return 'header';
 
@@ -299,6 +302,10 @@ export function generateName(result: AnalysisResult, parentRole?: NodeRole): str
   // Check if it's a structural name that just needs lowercasing
   var lowered = getStructuralLowercase(name);
   if (lowered) {
+    // Nested sections become groups — only root can be section
+    if (lowered === 'section' && insideSection) {
+      return withLayoutSuffix('group', result);
+    }
     // Add layout suffix for containers and sections
     if (lowered === 'container' || lowered === 'section' || lowered === 'group') {
       return withLayoutSuffix(lowered, result);
@@ -306,8 +313,15 @@ export function generateName(result: AnalysisResult, parentRole?: NodeRole): str
     return lowered;
   }
 
-  // Don't rename already-correct semantic names (already lowercase)
-  if (isSemanticName(name) && name === name.toLowerCase()) return null;
+  // Already-correct semantic names — but add layout suffix if missing
+  if (isSemanticName(name) && name === name.toLowerCase()) {
+    var containerLikeNames = ['container', 'group', 'card', 'hero', 'feature', 'cta', 'footer', 'header'];
+    var suffix = getLayoutSuffix(result);
+    if (suffix && containerLikeNames.indexOf(name) >= 0 && name.indexOf('_vstack') < 0 && name.indexOf('_hstack') < 0) {
+      return name + suffix;
+    }
+    return null;
+  }
 
   // Don't rename user-given non-auto names (unless they match structural names above)
   if (!isAutoNamed(name) && !isSemanticName(name)) return null;
@@ -340,7 +354,14 @@ export function generateName(result: AnalysisResult, parentRole?: NodeRole): str
   }
 
   var baseName = ROLE_TO_NAME[role] || null;
-  if (baseName && (baseName === 'section' || role === 'flex-row' || role === 'flex-col')) {
+  if (!baseName) return null;
+
+  // Nested sections become groups
+  if (baseName === 'section' && insideSection) {
+    return withLayoutSuffix('group', result);
+  }
+
+  if (baseName === 'section' || role === 'flex-row' || role === 'flex-col') {
     return withLayoutSuffix(baseName, result);
   }
   return baseName;
@@ -354,10 +375,11 @@ function collectRenamable(
   results: AnalysisResult[],
   actions: RenameAction[],
   parentRole?: NodeRole,
+  insideSection?: boolean,
 ): void {
   for (var ri = 0; ri < results.length; ri++) {
     var result = results[ri];
-    var suggested = generateName(result, parentRole);
+    var suggested = generateName(result, parentRole, insideSection);
     if (suggested) {
       // If already named exactly this, skip entirely
       if (result.name !== suggested) {
@@ -374,9 +396,11 @@ function collectRenamable(
 
     // Recurse into children, passing this node's role as parent context
     if (result.children.length > 0) {
-      // Use the detected role as parent context for children
       var childParentRole = COMPOSITE_ROLES.has(result.role) ? result.role : parentRole;
-      collectRenamable(result.children, actions, childParentRole);
+      // Track if we're inside a section — children of sections can't be sections
+      var isThisSection = result.role === 'section' || (suggested && suggested.indexOf('section') === 0);
+      var childInsideSection = insideSection || isThisSection;
+      collectRenamable(result.children, actions, childParentRole, childInsideSection);
     }
   }
 }

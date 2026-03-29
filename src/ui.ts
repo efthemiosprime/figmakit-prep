@@ -4,36 +4,36 @@ let currentTokenFormat: string = 'css';
 let tokenFormatted: Record<string, string> = {};
 
 // --- DOM Helpers ---
-const $ = (sel: string) => document.querySelector(sel) as HTMLElement;
-const $$ = (sel: string) => document.querySelectorAll(sel);
+function qs(sel: string): HTMLElement { return document.querySelector(sel) as HTMLElement; }
+function qsa(sel: string): NodeListOf<Element> { return document.querySelectorAll(sel); }
 
 function post(msg: any) {
   parent.postMessage({ pluginMessage: msg }, '*');
 }
 
 function setStatus(text: string) {
-  $('#status-text').textContent = text;
+  qs('#status-text').textContent = text;
 }
 
 // --- Tab Switching ---
-$$('.tab').forEach(tab => {
+qsa('.tab').forEach(tab => {
   tab.addEventListener('click', () => {
-    $$('.tab').forEach(t => t.classList.remove('active'));
-    $$('.panel').forEach(p => p.classList.remove('active'));
+    qsa('.tab').forEach(t => t.classList.remove('active'));
+    qsa('.panel').forEach(p => p.classList.remove('active'));
     tab.classList.add('active');
     const panelId = `panel-${(tab as HTMLElement).dataset.tab}`;
-    $(`#${panelId}`)?.classList.add('active');
+    qs('#' + panelId)?.classList.add('active');
   });
 });
 
 // --- Token format tabs ---
-$$('.token-tab').forEach(tab => {
+qsa('.token-tab').forEach(tab => {
   tab.addEventListener('click', () => {
-    $$('.token-tab').forEach(t => t.classList.remove('active'));
+    qsa('.token-tab').forEach(t => t.classList.remove('active'));
     tab.classList.add('active');
     currentTokenFormat = (tab as HTMLElement).dataset.format ?? 'css';
     if (tokenFormatted[currentTokenFormat]) {
-      $('#token-output').textContent = tokenFormatted[currentTokenFormat];
+      qs('#token-output').textContent = tokenFormatted[currentTokenFormat];
     }
   });
 });
@@ -52,30 +52,38 @@ document.addEventListener('click', function(e) {
 
   if (parentId === 'rename-view-toggle') {
     var view = target.dataset.view;
-    $$('#rename-view-toggle button').forEach(function(b) { b.classList.remove('active'); });
+    qsa('#rename-view-toggle button').forEach(function(b) { b.classList.remove('active'); });
     target.classList.add('active');
-    $('#rename-results').style.display = view === 'tree' ? 'none' : 'block';
-    $('#rename-tree').style.display = view === 'tree' ? 'block' : 'none';
+    qs('#rename-results').style.display = view === 'tree' ? 'none' : 'block';
+    qs('#rename-tree').style.display = view === 'tree' ? 'block' : 'none';
+  }
+
+  if (parentId === 'token-view-toggle') {
+    var tokenView = target.dataset.view;
+    qsa('#token-view-toggle button').forEach(function(b) { b.classList.remove('active'); });
+    target.classList.add('active');
+    qs('#token-inventory').style.display = tokenView === 'inventory' ? 'block' : 'none';
+    qs('#token-code-view').style.display = tokenView === 'code' ? 'block' : 'none';
   }
 
   if (parentId === 'clean-view-toggle') {
     var cleanView = target.dataset.view;
-    $$('#clean-view-toggle button').forEach(function(b) { b.classList.remove('active'); });
+    qsa('#clean-view-toggle button').forEach(function(b) { b.classList.remove('active'); });
     target.classList.add('active');
-    $('#clean-results').style.display = cleanView === 'tree' ? 'none' : 'block';
-    $('#clean-tree').style.display = cleanView === 'tree' ? 'block' : 'none';
+    qs('#clean-results').style.display = cleanView === 'tree' ? 'none' : 'block';
+    qs('#clean-tree').style.display = cleanView === 'tree' ? 'block' : 'none';
   }
 });
 
 // --- Clean Panel ---
-$('#clean-scan').addEventListener('click', () => {
+qs('#clean-scan').addEventListener('click', () => {
   setStatus('Scanning...');
   post({ type: 'scan', feature: 'cleaner' });
 });
 
-$('#clean-apply').addEventListener('click', function() {
+qs('#clean-apply').addEventListener('click', function() {
   if (!currentFeatureData) return;
-  var checked = Array.from($$('#clean-results input[type="checkbox"]:checked'));
+  var checked = Array.from(qsa('#clean-results input[type="checkbox"]:checked'));
   var actions = checked.map(function(cb: any) {
     var idx = parseInt(cb.dataset.index);
     var item = currentFeatureData.all[idx];
@@ -86,14 +94,14 @@ $('#clean-apply').addEventListener('click', function() {
 });
 
 // --- Rename Panel ---
-$('#rename-scan').addEventListener('click', () => {
+qs('#rename-scan').addEventListener('click', () => {
   setStatus('Scanning...');
   post({ type: 'scan', feature: 'renamer' });
 });
 
-$('#rename-apply').addEventListener('click', function() {
+qs('#rename-apply').addEventListener('click', function() {
   if (!currentFeatureData) return;
-  var checked = Array.from($$('#rename-results input[type="checkbox"]:checked'));
+  var checked = Array.from(qsa('#rename-results input[type="checkbox"]:checked'));
   var actions = checked.map(function(cb: any) {
     var idx = parseInt(cb.dataset.index);
     var item = currentFeatureData[idx];
@@ -104,45 +112,155 @@ $('#rename-apply').addEventListener('click', function() {
 });
 
 // --- Validate Panel ---
-$('#validate-scan').addEventListener('click', () => {
+qs('#validate-scan').addEventListener('click', () => {
   setStatus('Validating...');
   post({ type: 'scan', feature: 'validator' });
 });
 
 // --- Label Panel ---
-$('#label-apply').addEventListener('click', () => {
-  const role = ($('#label-role') as HTMLSelectElement).value;
+qs('#label-apply').addEventListener('click', () => {
+  const role = (qs('#label-role') as HTMLSelectElement).value;
   if (!role) return;
   const mode = (document.querySelector('input[name="label-mode"]:checked') as HTMLInputElement)?.value ?? 'prefix';
   post({ type: 'apply', feature: 'labeler', role, mode });
   setStatus('Labeling...');
 });
 
-$('#label-remove').addEventListener('click', () => {
+qs('#label-remove').addEventListener('click', () => {
   post({ type: 'apply', feature: 'labeler', role: '', mode: 'prefix', remove: true });
   setStatus('Removing labels...');
 });
 
 // --- BEM Panel ---
-$('#bem-scan').addEventListener('click', () => {
+qs('#bem-scan').addEventListener('click', () => {
   setStatus('Scanning BEM...');
   post({ type: 'scan', feature: 'bem' });
 });
 
-$('#bem-apply').addEventListener('click', () => {
-  const includeModifiers = ($('#bem-modifiers') as HTMLInputElement).checked;
+qs('#bem-apply').addEventListener('click', () => {
+  const includeModifiers = (qs('#bem-modifiers') as HTMLInputElement).checked;
   post({ type: 'apply', feature: 'bem', includeModifiers });
   setStatus('Applying BEM...');
 });
 
+// --- Token Generate SCSS ---
+qs('#token-generate').addEventListener('click', function() {
+  var lines: string[] = [];
+  lines.push('// ===========================================');
+  lines.push('// Design Tokens — Generated by FigmaKit Prep');
+  lines.push('// ===========================================');
+  lines.push('');
+
+  // Collect color names from inputs
+  var colorInputs = qsa('#token-results .token-item');
+  var currentSection = '';
+
+  colorInputs.forEach(function(item: any) {
+    // Check previous sibling section header
+    var prev = item.previousElementSibling;
+    while (prev && !prev.classList.contains('token-section-header')) {
+      prev = prev.previousElementSibling;
+    }
+    if (prev) {
+      var sectionName = prev.textContent.trim().split(' ')[0];
+      if (sectionName !== currentSection) {
+        currentSection = sectionName;
+        lines.push('');
+        lines.push('// --- ' + currentSection + ' ---');
+      }
+    }
+
+    var input = item.querySelector('.token-name-input');
+    if (!input) return;
+    var tokenName = (input as HTMLInputElement).value.trim();
+    if (!tokenName) return;
+
+    // Get value from the item
+    var valueEl = item.querySelector('.token-value');
+    var strongEl = item.querySelector('strong');
+    var swatchEl = item.querySelector('.token-swatch');
+
+    if (swatchEl) {
+      // Color token
+      var colorValue = '';
+      if (valueEl) colorValue = valueEl.textContent.trim();
+      if (colorValue) {
+        lines.push('$' + tokenName + ': ' + colorValue + ';');
+      }
+    } else if (strongEl) {
+      // Text style or spacing
+      var numValue = strongEl.textContent.trim();
+      if (numValue.indexOf('px') >= 0) {
+        // Check if it's a text style (has font weight info)
+        var detailText = item.querySelector('.token-detail');
+        if (detailText && detailText.textContent.indexOf('/') >= 0) {
+          // Text style: "16px / 400 — Inter"
+          var parts = detailText.textContent.trim().split('/');
+          var fontSize = numValue;
+          var weightPart = parts[1] ? parts[1].trim().split('—')[0].trim() : '';
+          var familyPart = parts[1] && parts[1].indexOf('—') >= 0 ? parts[1].split('—')[1].trim() : '';
+          lines.push('$' + tokenName + '-size: ' + fontSize + ';');
+          if (weightPart) lines.push('$' + tokenName + '-weight: ' + weightPart + ';');
+          if (familyPart) lines.push('$' + tokenName + '-family: ' + familyPart + ';');
+        } else {
+          // Spacing
+          lines.push('$' + tokenName + ': ' + numValue + ';');
+        }
+      }
+    } else {
+      // Font family
+      var familyName = '';
+      var familyEl = item.querySelector('.token-detail div');
+      if (familyEl) familyName = familyEl.textContent.trim();
+      if (familyName) {
+        lines.push("$font-" + tokenName + ": '" + familyName + "', sans-serif;");
+      }
+    }
+  });
+
+  // Also add spacing scale map
+  lines.push('');
+  lines.push('// --- Spacing Scale ---');
+  lines.push('$spacing: (');
+  var scaleEntries = [
+    ["'4xs'", '4px'], ["'3xs'", '8px'], ["'2xs'", '12px'],
+    ["'xs'", '16px'], ["'sm'", '20px'], ["'md'", '24px'],
+    ["'lg'", '32px'], ["'xl'", '48px'], ["'2xl'", '80px'], ["'3xl'", '96px'],
+  ];
+  for (var se = 0; se < scaleEntries.length; se++) {
+    var comma = se < scaleEntries.length - 1 ? ',' : '';
+    lines.push('  ' + scaleEntries[se][0] + ': ' + scaleEntries[se][1] + comma);
+  }
+  lines.push(');');
+
+  var scss = lines.join('\n');
+
+  // Switch to code view and show SCSS
+  qsa('#token-view-toggle button').forEach(function(b) { b.classList.remove('active'); });
+  var codeBtn = qsa('#token-view-toggle button')[1];
+  if (codeBtn) codeBtn.classList.add('active');
+  qs('#token-inventory').style.display = 'none';
+  qs('#token-code-view').style.display = 'block';
+  qs('#token-output').textContent = scss;
+
+  // Select SCSS tab
+  qsa('.token-tab').forEach(function(t) { t.classList.remove('active'); });
+  var scssTab = qsa('.token-tab')[1];
+  if (scssTab) scssTab.classList.add('active');
+  currentTokenFormat = 'scss';
+  tokenFormatted['scss-generated'] = scss;
+
+  setStatus('SCSS generated from inventory');
+});
+
 // --- Assets Panel ---
-$('#assets-scan').addEventListener('click', function() {
+qs('#assets-scan').addEventListener('click', function() {
   setStatus('Scanning assets...');
   post({ type: 'scan', feature: 'assets' });
 });
 
-$('#assets-apply').addEventListener('click', function() {
-  var inputs = $$('#assets-results .asset-rename input');
+qs('#assets-apply').addEventListener('click', function() {
+  var inputs = qsa('#assets-results .asset-rename input');
   var actions: any[] = [];
   inputs.forEach(function(input: any) {
     var nodeId = input.dataset.nodeId;
@@ -159,15 +277,15 @@ $('#assets-apply').addEventListener('click', function() {
 });
 
 // --- Token Panel ---
-$('#token-scan').addEventListener('click', function() {
+qs('#token-scan').addEventListener('click', function() {
   setStatus('Extracting tokens...');
   post({ type: 'scan', feature: 'tokens' });
 });
 
-$('#token-copy').addEventListener('click', () => {
-  const text = $('#token-output').textContent ?? '';
+qs('#token-copy').addEventListener('click', () => {
+  const text = qs('#token-output').textContent ?? '';
   navigator.clipboard?.writeText(text).then(() => {
-    const btn = $('#token-copy');
+    const btn = qs('#token-copy');
     btn.textContent = 'Copied!';
     setTimeout(() => { btn.textContent = 'Copy'; }, 1500);
   });
@@ -182,18 +300,18 @@ function renderCleanResults(data: any) {
   var tree = data.tree || [];
   currentFeatureData = { all: removable.concat(flattenable) };
 
-  $('#clean-summary').style.display = 'flex';
-  $('#clean-removable-count').textContent = removable.length;
-  $('#clean-flattenable-count').textContent = flattenable.length;
-  $('#clean-safe-count').textContent = safe.length;
+  qs('#clean-summary').style.display = 'flex';
+  qs('#clean-removable-count').textContent = removable.length;
+  qs('#clean-flattenable-count').textContent = flattenable.length;
+  qs('#clean-safe-count').textContent = safe.length;
 
   // Show view toggle
-  $('#clean-view-toggle').style.display = 'flex';
+  qs('#clean-view-toggle').style.display = 'flex';
 
-  var container = $('#clean-results');
+  var container = qs('#clean-results');
   if (removable.length === 0 && flattenable.length === 0) {
     container.innerHTML = '<div class="results-empty">No layers to clean</div>';
-    ($('#clean-apply') as HTMLButtonElement).disabled = true;
+    (qs('#clean-apply') as HTMLButtonElement).disabled = true;
     renderCleanTree(tree);
     return;
   }
@@ -212,7 +330,7 @@ function renderCleanResults(data: any) {
     '</div>';
   }
   container.innerHTML = html;
-  ($('#clean-apply') as HTMLButtonElement).disabled = false;
+  (qs('#clean-apply') as HTMLButtonElement).disabled = false;
 
   // Render tree
   renderCleanTree(tree);
@@ -256,7 +374,7 @@ function buildCleanedTree(nodes: any[]): any[] {
  * into the given container element.
  */
 function renderTreeInto(containerId: string, tree: any[]) {
-  var treeContainer = $(containerId);
+  var treeContainer = qs(containerId);
   var cleanedTree = buildCleanedTree(tree);
   var lines: string[] = [];
 
@@ -299,8 +417,8 @@ function renderRenameResults(data: any) {
   currentFeatureData = actions;
   renameTreeData = tree || [];
 
-  $('#rename-summary').style.display = 'flex';
-  $('#rename-count').textContent = String(actions.length);
+  qs('#rename-summary').style.display = 'flex';
+  qs('#rename-count').textContent = String(actions.length);
 
   // Count total layers in tree
   var totalLayers = 0;
@@ -311,15 +429,15 @@ function renderRenameResults(data: any) {
     }
   }
   countNodes(renameTreeData);
-  $('#rename-total').textContent = String(totalLayers);
+  qs('#rename-total').textContent = String(totalLayers);
 
   // Show view toggle
-  $('#rename-view-toggle').style.display = 'flex';
+  qs('#rename-view-toggle').style.display = 'flex';
 
-  var container = $('#rename-results');
+  var container = qs('#rename-results');
   if (actions.length === 0) {
     container.innerHTML = '<div class="results-empty">No layers to rename — all layers already have semantic names</div>';
-    ($('#rename-apply') as HTMLButtonElement).disabled = true;
+    (qs('#rename-apply') as HTMLButtonElement).disabled = true;
     renderRenameTree(renameTreeData);
     return;
   }
@@ -335,7 +453,7 @@ function renderRenameResults(data: any) {
     '</div>';
   });
   container.innerHTML = html;
-  ($('#rename-apply') as HTMLButtonElement).disabled = false;
+  (qs('#rename-apply') as HTMLButtonElement).disabled = false;
 
   // Render tree preview
   renderRenameTree(renameTreeData);
@@ -366,12 +484,12 @@ function renderRenameTree(tree: any[]) {
 }
 
 function renderValidationReport(data: any) {
-  $('#validate-empty').style.display = 'none';
-  $('#validate-report').style.display = 'block';
+  qs('#validate-empty').style.display = 'none';
+  qs('#validate-report').style.display = 'block';
 
   function renderTier(listId: string, countId: string, items: any[]) {
-    $(countId).textContent = String(items.length);
-    const container = $(listId);
+    qs(countId).textContent = String(items.length);
+    const container = qs(listId);
     if (items.length === 0) {
       container.innerHTML = '<div class="results-empty">None</div>';
       return;
@@ -395,10 +513,10 @@ function renderValidationReport(data: any) {
 }
 
 function renderBEMResults(data: any[]) {
-  const container = $('#bem-results');
+  const container = qs('#bem-results');
   if (data.length === 0) {
     container.innerHTML = '<div class="results-empty">No BEM mappings (select a card, hero, or feature)</div>';
-    ($('#bem-apply') as HTMLButtonElement).disabled = true;
+    (qs('#bem-apply') as HTMLButtonElement).disabled = true;
     return;
   }
 
@@ -411,20 +529,20 @@ function renderBEMResults(data: any[]) {
     </div>`;
   });
   container.innerHTML = html;
-  ($('#bem-apply') as HTMLButtonElement).disabled = false;
+  (qs('#bem-apply') as HTMLButtonElement).disabled = false;
 }
 
 function renderAssetResults(data: any[]) {
-  $('#assets-summary').style.display = 'flex';
+  qs('#assets-summary').style.display = 'flex';
   var withIssues = data.filter(function(a: any) { return !a.hasGoodName; });
-  $('#assets-total').textContent = String(data.length);
-  $('#assets-issues').textContent = String(withIssues.length);
-  $('#assets-ok').textContent = String(data.length - withIssues.length);
+  qs('#assets-total').textContent = String(data.length);
+  qs('#assets-issues').textContent = String(withIssues.length);
+  qs('#assets-ok').textContent = String(data.length - withIssues.length);
 
-  var container = $('#assets-results');
+  var container = qs('#assets-results');
   if (data.length === 0) {
     container.innerHTML = '<div class="results-empty">No exportable assets found</div>';
-    ($('#assets-apply') as HTMLButtonElement).disabled = true;
+    (qs('#assets-apply') as HTMLButtonElement).disabled = true;
     return;
   }
 
@@ -488,7 +606,7 @@ function renderAssetResults(data: any[]) {
   }
 
   container.innerHTML = html;
-  ($('#assets-apply') as HTMLButtonElement).disabled = withIssues.length === 0;
+  (qs('#assets-apply') as HTMLButtonElement).disabled = withIssues.length === 0;
 
   // Set preview images from byte arrays → blob URLs
   for (var pi = 0; pi < data.length; pi++) {
@@ -509,12 +627,97 @@ function renderAssetResults(data: any[]) {
 }
 
 function renderTokens(data: any) {
-  if (!data.tokens) {
-    $('#token-output').textContent = 'No tokens found. Select a node with styles.';
+  var agg = data.aggregated;
+  tokenFormatted = data.formatted || {};
+
+  // Show view toggle
+  qs('#token-view-toggle').style.display = 'flex';
+
+  // Render code view
+  if (tokenFormatted[currentTokenFormat]) {
+    qs('#token-output').textContent = tokenFormatted[currentTokenFormat];
+  }
+
+  // Render inventory
+  if (!agg || (agg.colors.length === 0 && agg.fonts.length === 0 && agg.textStyles.length === 0 && agg.spacings.length === 0)) {
+    qs('#token-results').innerHTML = '<div class="results-empty">No design tokens found</div>';
     return;
   }
-  tokenFormatted = data.formatted;
-  $('#token-output').textContent = tokenFormatted[currentTokenFormat] ?? '';
+
+  var html = '';
+
+  // Colors
+  if (agg.colors.length > 0) {
+    html += '<div class="token-section-header">Colors <span class="token-section-count">' + agg.colors.length + '</span></div>';
+    for (var ci = 0; ci < agg.colors.length; ci++) {
+      var c = agg.colors[ci];
+      html += '<div class="token-item">';
+      html += '<div class="token-swatch" style="background:' + escHtml(c.value) + '"></div>';
+      html += '<div class="token-detail">';
+      html += '<div class="token-value">' + escHtml(c.value) + '</div>';
+      if (c.usedIn.length > 0) {
+        html += '<div class="token-usage">Used in: ' + escHtml(c.usedIn.join(', ')) + '</div>';
+      }
+      html += '</div>';
+      html += '<input class="token-name-input" value="' + escHtml(c.suggestedName) + '">';
+      html += '<span class="token-count">' + c.count + 'x</span>';
+      html += '</div>';
+    }
+  }
+
+  // Fonts
+  if (agg.fonts.length > 0) {
+    html += '<div class="token-section-header">Fonts <span class="token-section-count">' + agg.fonts.length + '</span></div>';
+    for (var fi = 0; fi < agg.fonts.length; fi++) {
+      var f = agg.fonts[fi];
+      html += '<div class="token-item">';
+      html += '<div class="token-detail">';
+      html += '<div style="font-family:\'' + escHtml(f.family) + '\';font-size:13px">' + escHtml(f.family) + '</div>';
+      html += '</div>';
+      html += '<input class="token-name-input" value="' + escHtml(f.suggestedName) + '">';
+      html += '<span class="token-count">' + f.count + 'x</span>';
+      html += '</div>';
+    }
+  }
+
+  // Text Styles
+  if (agg.textStyles.length > 0) {
+    html += '<div class="token-section-header">Text Styles <span class="token-section-count">' + agg.textStyles.length + '</span></div>';
+    for (var ti = 0; ti < agg.textStyles.length; ti++) {
+      var ts = agg.textStyles[ti];
+      html += '<div class="token-item">';
+      html += '<div class="token-detail">';
+      html += '<div><strong>' + Math.round(ts.fontSize) + 'px</strong> / ' + ts.fontWeight + ' — ' + escHtml(ts.fontFamily) + '</div>';
+      if (ts.textClass) {
+        html += '<div class="token-value">' + escHtml(ts.textClass) + '</div>';
+      }
+      if (ts.usedIn.length > 0) {
+        html += '<div class="token-usage">Used in: ' + escHtml(ts.usedIn.join(', ')) + '</div>';
+      }
+      html += '</div>';
+      html += '<input class="token-name-input" value="' + escHtml(ts.suggestedName) + '">';
+      html += '<span class="token-count">' + ts.count + 'x</span>';
+      html += '</div>';
+    }
+  }
+
+  // Spacing
+  if (agg.spacings.length > 0) {
+    html += '<div class="token-section-header">Spacing <span class="token-section-count">' + agg.spacings.length + '</span></div>';
+    for (var si = 0; si < agg.spacings.length; si++) {
+      var sp = agg.spacings[si];
+      html += '<div class="token-item">';
+      html += '<div class="token-detail">';
+      html += '<div><strong>' + Math.round(sp.value) + 'px</strong></div>';
+      html += '</div>';
+      html += '<input class="token-name-input" value="' + escHtml(sp.suggestedName) + '">';
+      html += '<span class="token-count">' + sp.count + 'x</span>';
+      html += '</div>';
+    }
+  }
+
+  qs('#token-results').innerHTML = html;
+  (qs('#token-generate') as HTMLButtonElement).disabled = false;
 }
 
 // --- Message Handler ---
@@ -535,12 +738,12 @@ window.onmessage = (event: MessageEvent) => {
   } else if (msg.type === 'apply-result') {
     setStatus(`Applied: ${msg.feature}`);
     // Re-enable buttons
-    $$('.btn-primary').forEach(btn => {
+    qsa('.btn-primary').forEach(btn => {
       (btn as HTMLButtonElement).disabled = false;
     });
   } else if (msg.type === 'error') {
     setStatus(`Error: ${msg.message}`);
   } else if (msg.type === 'selection-change') {
-    $('#status-selection').textContent = msg.count > 0 ? `${msg.count} selected` : 'No selection';
+    qs('#status-selection').textContent = msg.count > 0 ? `${msg.count} selected` : 'No selection';
   }
 };

@@ -23,7 +23,7 @@ const uiBuildOptions = {
   write: false,
   format: 'iife',
   target: 'es2015',
-  minify: !isWatch,
+  minify: false, // Don't minify UI — prevents variable name collisions in Figma sandbox
 };
 
 async function build() {
@@ -37,9 +37,11 @@ async function build() {
   const uiJs = uiResult.outputFiles[0].text;
 
   const uiHtml = readFileSync(resolve(__dirname, 'src/ui.html'), 'utf8');
+  // Insert script before </body> instead of replacing a marker
+  // (marker replacement can corrupt minified JS that contains similar strings)
   const finalHtml = uiHtml.replace(
-    '<!-- INLINE_SCRIPT -->',
-    `<script>${uiJs}</script>`
+    '</body>',
+    `<script>${uiJs}</script>\n</body>`
   );
 
   writeFileSync(resolve(__dirname, 'dist/ui.html'), finalHtml);
@@ -64,8 +66,8 @@ if (isWatch) {
             const uiJs = readFileSync(resolve(__dirname, 'dist/ui.js'), 'utf8');
             const uiHtml = readFileSync(resolve(__dirname, 'src/ui.html'), 'utf8');
             const finalHtml = uiHtml.replace(
-              '<!-- INLINE_SCRIPT -->',
-              `<script>${uiJs}</script>`
+              '</body>',
+              `<script>${uiJs}</script>\n</body>`
             );
             writeFileSync(resolve(__dirname, 'dist/ui.html'), finalHtml);
             console.log('UI rebuilt.');

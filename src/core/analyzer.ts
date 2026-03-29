@@ -188,7 +188,7 @@ function analyzeNodeInner(node: any, name: string, children: any[], depth: numbe
       fingerprint.parentWidth = safeGetNumber(node, 'width', 0);
       fingerprint.parentHeight = safeGetNumber(node, 'height', 0);
       fingerprint.hasImageFill = hasImageFill(node);
-      structureClassification = matchFingerprint(node, fingerprint);
+      structureClassification = matchFingerprint(node, fingerprint, children);
     }
   }
 

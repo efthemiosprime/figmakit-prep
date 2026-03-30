@@ -527,4 +527,26 @@ export function setupMessageHandler(): void {
 if (typeof figma !== 'undefined' && typeof __html__ !== 'undefined') {
   figma.showUI(__html__, { width: 480, height: 600 });
   setupMessageHandler();
+
+  // Track selection changes
+  figma.on('selectionchange', function() {
+    try {
+      var sel = figma.currentPage.selection;
+      var count = sel.length;
+      var name = '';
+      var type = '';
+      if (count === 1) {
+        try { name = sel[0].name || ''; } catch (e) { name = ''; }
+        try { type = sel[0].type || ''; } catch (e) { type = ''; }
+      }
+      figma.ui.postMessage({
+        type: 'selection-change',
+        count: count,
+        name: name,
+        nodeType: type,
+      });
+    } catch (e) {
+      // ignore
+    }
+  });
 }

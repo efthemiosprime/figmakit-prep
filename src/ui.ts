@@ -1077,6 +1077,14 @@ window.onmessage = (event: MessageEvent) => {
   } else if (msg.type === 'error') {
     setStatus('Error: ' + msg.message);
   } else if (msg.type === 'selection-change') {
-    qs('#status-selection').textContent = msg.count > 0 ? msg.count + ' selected' : 'No selection';
+    if (msg.count === 0) {
+      qs('#status-selection').textContent = 'No selection';
+    } else if (msg.count === 1) {
+      var selLabel = escHtml(msg.name || 'Unknown');
+      if (msg.nodeType) selLabel += ' (' + msg.nodeType + ')';
+      qs('#status-selection').textContent = selLabel;
+    } else {
+      qs('#status-selection').textContent = msg.count + ' selected';
+    }
   }
 };

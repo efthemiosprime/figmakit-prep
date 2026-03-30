@@ -129,7 +129,7 @@ describe('plugin entry', () => {
         const response = mockPostMessage.mock.calls[0][0];
         expect(response.type).toBe('scan-result');
         expect(response.feature).toBe('tokens');
-        expect(response.data.tokens).toBeDefined();
+        expect(response.data.aggregated).toBeDefined();
         expect(response.data.formatted).toBeDefined();
       });
 

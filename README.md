@@ -2,6 +2,10 @@
 
 Prepare your Figma files for accurate WordPress import. Clean layers, rename nodes semantically, validate structure, preview design tokens, manage exportable assets, and map component variants — all before syncing to WordPress with FigmaKit.
 
+<p align="center">
+  <img src="screenshot.png" alt="FigmaKit Prep — Clean and Rename tabs" width="800">
+</p>
+
 ## Features
 
 ### Clean
@@ -32,6 +36,10 @@ Auto-assign semantic names that match FigmaKit's WordPress resolver patterns. Pa
 - Recognize forms, modules, logos, FPO placeholders
 - Tree Preview showing the full renamed hierarchy
 - Copy Tree as plain text
+
+<p align="center">
+  <img src="screenshots/figmakit_rename.png" alt="Rename tab — semantic layer renaming with confidence scores" width="520">
+</p>
 
 ### Validate
 Confidence report showing how well FigmaKit will map each layer. Categorizes nodes into high (90%+), needs review (50-89%), low (<50%), and skipped tiers.
@@ -74,6 +82,10 @@ Analyze and manage exportable assets (images, icons, SVGs). Preview thumbnails, 
 - Batch Export All: downloads all checked assets as individual files with progress bar
 - Live format badge update when changing export format
 
+<p align="center">
+  <img src="screenshots/figmakit_assets.png" alt="Assets tab — thumbnails, naming validation, and export settings" width="520">
+</p>
+
 ### Tokens
 Aggregate design tokens from all nodes in the selection. Inventory view with editable names, plus code generation.
 
@@ -85,6 +97,10 @@ Aggregate design tokens from all nodes in the selection. Inventory view with edi
 - **Color Near-Duplicate Detection**: groups similar colors (RGB distance < 15) with consolidation suggestions
 - **Generate SCSS**: creates SCSS variables from the inventory with editable token names
 - **Code Preview**: formatted output in CSS variables, SCSS, utility classes, or Gutenberg block attributes
+
+<p align="center">
+  <img src="screenshots/figmakit_tokens.png" alt="Tokens tab — SCSS code generation from design tokens" width="520">
+</p>
 
 ## Detection Rules
 
